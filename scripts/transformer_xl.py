@@ -1,6 +1,7 @@
 import torch
 
-from transformers import LongformerModel, LongformerTokenizer, LongformerConfig
+from transformers import LongformerModel, LongformerConfig
+from tokenizers import Tokenizer
 from datasets import load_dataset
 
 def main():
@@ -9,7 +10,7 @@ def main():
 
     config = LongformerConfig()
     model = LongformerModel(config)
-    tokenizer = LongformerTokenizer.from_pretrained("allenai/longformer-base-4096")
+    tokenizer = Tokenizer.from_file("data/tokenizer-wiki2.json")
 
     for txt in dataset:
         tokens = tokenizer.encode(txt["text"], return_tensors="pt")
