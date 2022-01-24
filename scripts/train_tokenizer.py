@@ -13,7 +13,7 @@ def main():
         "<pad>", # Padding 
         "<msk>", # Mask
         ],
-        vocab_size=3000,
+        vocab_size=30000,
     )
 
     # Split by whitespace

@@ -11,7 +11,12 @@ def tokenize_dataset(tokenizer, samples):
 
 def main():
     # Create model
-    config = LongformerConfig(vocab_size=3000, attention_window=64, max_position_embeddings=219)
+    config = LongformerConfig(
+        vocab_size=30000,
+        attention_window=64,
+        max_position_embeddings=219,
+        num_hidden_layers=6
+    )
     model = LongformerForMaskedLM(config)
 
     # Put model on GPU
@@ -57,8 +62,8 @@ def main():
     )
 
     # Training loop
-    model.train()
     for _ in range(epochs):
+        model.train()
         for batch in train_loader:
             # Get the appropriate columns
             input_ids = batch["input_ids"].to(device)
@@ -82,18 +87,20 @@ def main():
             optimizer.zero_grad()
 
         average_loss = 0
-        for batch in valid_loader:
-            # Get the appropriate columns
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
+        model.eval()
+        with torch.no_grad():
+            for batch in valid_loader:
+                # Get the appropriate columns
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
 
-            # Move to GPU if possible
-            input_ids = input_ids.to(device)
-            attention_mask = attention_mask.to(device)
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-            average_loss += outputs.loss.item()
+                # Move to GPU if possible
+                input_ids = input_ids.to(device)
+                attention_mask = attention_mask.to(device)
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+                average_loss += outputs.loss.item()
 
-        print(average_loss)
+        print(average_loss/len(valid_loader))
 
 
 if __name__ == "__main__":
