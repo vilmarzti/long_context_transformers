@@ -1,4 +1,5 @@
-from datasets import load_dataset
 
-dataset = load_dataset("wikitext", name="wikitext-2-v1")
-print(dataset)
+def main():
+    pass
+
+if __name__ == "__main__":

@@ -13,7 +13,7 @@ def main():
         "<pad>", # Padding 
         "<msk>", # Mask
         ],
-        vocab_size=30000
+        vocab_size=30000,
     )
 
     # Split by whitespace
@@ -23,6 +23,7 @@ def main():
     files = [f"./data/wikitext-2/wiki.{split}.tokens" for split in ["test", "train", "valid"]]
     tokenizer.train(files, trainer)
 
+    # Add start and end sequence tag at beginning/end
     tokenizer.post_processor = TemplateProcessing(
         single="<s> $A </s>", # As far as I know we don't use sentence pairs
         special_tokens=[
@@ -30,6 +31,9 @@ def main():
             ("</s>", tokenizer.token_to_id("</s>"))
         ]
     )
+
+    # Add padding token
+    tokenizer.pad_token = tokenizer.token_to_id("<pad>")
 
     tokenizer.save("data/tokenizer-wiki2.json")
 
