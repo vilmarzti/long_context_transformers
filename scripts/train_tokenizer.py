@@ -1,4 +1,4 @@
-from tokenizers import Tokenizer
+from tokenizers import Tokenizer, AddedToken
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
@@ -36,7 +36,6 @@ def main():
     tokenizer.pad_token = tokenizer.token_to_id("<pad>")
 
     tokenizer.save("data/tokenizer-wiki2.json")
-
 
 
 if __name__ == "__main__":
