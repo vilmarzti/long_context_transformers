@@ -3,11 +3,11 @@
     as the current LongFormer model does not support
     autoregressive language modeling
 """
-from transformers import LongFormer
+from transformers import LongformerPreTrainedModel
 from torch import nn
 
 
-class LongFormerLMHeadModel(LongFormer):
+class LongFormerLMHeadModel(LongformerPreTrainedModel):
     """
     This class uses the LongFormer and places a linear layer at the end
     such that we can predict the next word in an autoregressive way.
