@@ -1,5 +1,8 @@
 import torch
-from transformers import TransfoXLConfig, TransfoXLLMHeadModel
+
+from transformers import AdamW, TransfoXLConfig, TransfoXLLMHeadModel, TransfoXLTokenizer
+from longcontext.utils.dataset import get_dataloader
+from longcontext.utils.training import train
 
 
 def main():
@@ -11,7 +14,19 @@ def main():
 
     # Get gpu if possible and put model on it
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model.to(device)
 
+    # Get tokenizer
+    tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
+
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 3000)
+
+    # Set optimizer
+    optimizer = AdamW(model.parameters())
+
+    # train
+    train(model, train_loader, optimizer, 10, valid_loader, device=device)
+    
 
 if __name__ == "__main__":
     main()

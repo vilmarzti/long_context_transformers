@@ -31,7 +31,9 @@ def get_dataloader(tokenizer, batch_size=8, samples=1000):
     tokenized_dataset.set_format("torch")
 
     # Remove text and type_ids
-    tokenized_dataset = tokenized_dataset.remove_columns(["text", "token_type_ids"])
+    tokenized_dataset = tokenized_dataset.remove_columns(["text"])
+    if "token_type_ids" in tokenized_dataset.column_names["train"]:
+        tokenized_dataset.remove_columns(["token_type_ids"])
     
     # Get Datasets
     if samples: 
