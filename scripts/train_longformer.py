@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 from transformers import LongformerForMaskedLM, LongformerConfig, PreTrainedTokenizerFast, AdamW, get_scheduler
+from longcontext.utils import train
 
 epochs = 10
 
@@ -61,46 +62,8 @@ def main():
         num_training_steps=epochs*len(train_loader)
     )
 
-    # Training loop
-    for _ in range(epochs):
-        model.train()
-        for batch in train_loader:
-            # Get the appropriate columns
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-
-            # Move to GPU if possible
-            input_ids = input_ids.to(device)
-            attention_mask = attention_mask.to(device)
-
-            # Let it run through the Model
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-
-            # Backprop
-            loss = outputs.loss
-            loss.backward()
-            optimizer.step()
-
-            lr_scheduler.step()
-
-            # Reset optimizer
-            optimizer.zero_grad()
-
-        average_loss = 0
-        model.eval()
-        with torch.no_grad():
-            for batch in valid_loader:
-                # Get the appropriate columns
-                input_ids = batch["input_ids"].to(device)
-                attention_mask = batch["attention_mask"].to(device)
-
-                # Move to GPU if possible
-                input_ids = input_ids.to(device)
-                attention_mask = attention_mask.to(device)
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-                average_loss += outputs.loss.item()
-
-        print(average_loss/len(valid_loader))
+    # train the model
+    train(model, train_loader, optimizer, epochs, valid_loader, lr_scheduler, "cuda") 
 
 
 if __name__ == "__main__":
