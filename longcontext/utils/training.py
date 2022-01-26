@@ -5,7 +5,7 @@ import torch
 
 
 def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu"):
-    """
+    """ The training loop with validation.
 
     Args:
         model (torch.nn.Module): A transformer where the call function should 
@@ -21,7 +21,6 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
         device (string, optional): Either "cpu" or "cuda" for training on cpu/gpu.
             Defaults to "cpu"
     """
-
     for epoch in range(epochs):
         model.train()
         for batch in train_loader:
