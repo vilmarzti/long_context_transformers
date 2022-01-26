@@ -1,9 +1,9 @@
 import torch
 
-from torch.utils.data import DataLoader
-from datasets import load_dataset
 from transformers import LongformerForMaskedLM, LongformerConfig, PreTrainedTokenizerFast, AdamW, get_scheduler
+
 from longcontext.utils import train
+from longcontext.utils.dataset import get_dataloader
 
 epochs = 10
 
@@ -30,26 +30,8 @@ def main():
     # Hack I need to fix
     tokenizer.pad_token = 3
 
-    # Load Dataset
-    dataset = load_dataset("wikitext", name="wikitext-2-v1")
-
-    # Tokenize Dataset
-    tokenized_dataset = dataset.map(
-        lambda samples: tokenizer(samples["text"], padding="max_length", truncation=True, max_length=218),
-        batched=True
-    )
-    tokenized_dataset.set_format("torch")
-
-    # Remove text and type_ids
-    tokenized_dataset = tokenized_dataset.remove_columns(["text", "token_type_ids"])
-    
-    # Get Datasets
-    train_dataset = tokenized_dataset["train"].shuffle(seed=42).select(range(1000))
-    valid_dataset = tokenized_dataset["validation"].shuffle(seed=42).select(range(200))
-
-    # Get Dataloader
-    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=8)
-    valid_loader = DataLoader(valid_dataset, batch_size=8)
+    # Get DataLoaders from wikitext2
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 3000)
 
     # Set optimizer
     optimizer = AdamW(model.parameters())
