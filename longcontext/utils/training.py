@@ -83,9 +83,6 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     else:
                         outputs = model(input_ids=input_ids, labels=input_ids)
 
-
-                    outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-
                     # Accumulate losses if necessary
                     if hasattr(outputs, "loss"):
                         loss = outputs.loss
