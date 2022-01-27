@@ -19,7 +19,8 @@ def main():
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
 
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 3000)
+    # Get Dataloaders processed by TransfoXLTokenizer
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 100)
 
     # Set optimizer
     optimizer = AdamW(model.parameters())
