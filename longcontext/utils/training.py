@@ -3,6 +3,8 @@
 """
 import torch
 
+from transformers import LongformerModel
+
 
 def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu"):
     """ The training loop with validation.
@@ -34,10 +36,21 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             attention_mask = attention_mask.to(device)
 
             # Let it run through the Model
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+            # The TransformerXL model doesn't have an attention_mask input
+            if model is LongformerModel:
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+            else:
+                outputs = model(input_ids=input_ids, labels=input_ids)
+
+            # Accumulate losses if necessary
+            if hasattr(outputs, "loss"):
+                loss = outputs.loss
+            elif hasattr(outputs, "losses"):
+                loss = torch.sum(outputs.losses)
+            else:
+                raise AttributeError("outputs neither contain attribute `loss` or `losses`")
 
             # Backprop
-            loss = outputs.loss
             loss.backward()
             optimizer.step()
 
@@ -62,8 +75,23 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     # Move to GPU if possible
                     input_ids = input_ids.to(device)
                     attention_mask = attention_mask.to(device)
-                    outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-                    average_loss += outputs.loss.item()
+
+                    # Let it run through the Model
+                    # The TransformerXL model doesn't have an attention_mask input
+                    if model is LongformerModel:
+                        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+                    else:
+                        outputs = model(input_ids=input_ids, labels=input_ids)
+
+                    # Accumulate losses if necessary
+                    if hasattr(outputs, "loss"):
+                        loss = outputs.loss
+                    elif hasattr(outputs, "losses"):
+                        loss = torch.mean(outputs.losses)
+                    else:
+                        raise AttributeError("outputs neither contain attribute `loss` or `losses`")
+
+                    average_loss += loss.item()
                 
                 print(f"{epoch} in {epochs} done")
                 print(average_loss/len(valid_loader))

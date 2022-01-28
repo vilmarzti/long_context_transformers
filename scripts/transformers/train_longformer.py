@@ -31,7 +31,7 @@ def main():
     tokenizer.pad_token = 3
 
     # Get DataLoaders from wikitext2
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 3000)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 24)
 
     # Set optimizer
     optimizer = AdamW(model.parameters())
@@ -45,7 +45,7 @@ def main():
     )
 
     # train the model
-    train(model, train_loader, optimizer, epochs, valid_loader, lr_scheduler, "cuda") 
+    train(model, train_loader, optimizer, epochs, valid_loader, lr_scheduler, device) 
 
 
 if __name__ == "__main__":
