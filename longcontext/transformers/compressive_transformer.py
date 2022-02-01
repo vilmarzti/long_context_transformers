@@ -132,16 +132,17 @@ class CompressiveLayer(nn.Module):
         self.norm_self_attn = nn.LayerNorm([self.hidden_size])
     
     def _concat_memories(self, input_ids, mem=None, c_mem=None):
-        """ Concatenate the tensors 
+        """ Concatenate the tensors of input_ids, memory and compressed memory
 
         Args:
-            input_ids ([type]): [description]
-            mem ([type], optional): [description]. Defaults to None.
-            c_mem ([type], optional): [description]. Defaults to None.
+            input_ids (torch.tensor): The encoded sequence
+            mem (torch.tensor, optional): The memories from previous runs. Defaults to None.
+            c_mem (torch.tensor, optional): The compressed memories of previous runs. Defaults to None.
 
         Returns:
-            [type]: [description]
+            torch.tensor: Concatenated version of input_ids, memory and compressed memory
         """
+        # Concatenate memory and compressed memory
         if mem is None:
             return input_ids
         elif c_mem is not None:
@@ -151,14 +152,31 @@ class CompressiveLayer(nn.Module):
         # TODO how to order norm
         norm = self.norm_self_attn(mem)
 
-        combined = torch.cat((input_ids, mem), dim=0)
+        # Combine input_ids with memory and compressed memory
+        combined = torch.cat((input_ids, norm), dim=0)
+
         return combined
 
     def forward(self, input_ids, positional_embedding, mem=None, c_mem=None, attention_mask=None, output_attention=False):
-        norm_attn = self.norm_self_attn(input_ids)
+        """Forward pass thorught this Compressive Transformer layer
 
+        Args:
+            input_ids (torch.tensor): The encoded sequence.
+            positional_embedding (torch.tensor): The embeddings used for the relative positional encoding
+            mem (torch.tensor, optional): The memories from previous runs. Defaults to None.
+            c_mem (torch.tensor, optional): The compressed memories from previous runs. Defaults to None.
+            attention_mask (torch.tensor, optional): Attention mask on which tokens to attend. The values
+                should be either 0 or 1. Defaults to None.
+            output_attention (bool, optional): Whether to output attentions. Defaults to False.
+
+        Returns:
+            torch.tensor: The encoded sequence after a forward pass through this layer
+        """
+        # Norm before attention
+        norm_attn = self.norm_self_attn(input_ids)
         combined = self._concat_memories(norm_attn, mem, c_mem)
 
+        # Apply relative self attention
         attention_scores = self.self_attn(
             combined,
             positional_embedding,
@@ -166,8 +184,10 @@ class CompressiveLayer(nn.Module):
             output_attention=output_attention
         )
 
+        # Final feed forward block
         feed_forward = self.feed_forward(attention_scores[0])
         outputs = [feed_forward] + attention_scores[1:]
+
         return outputs
 
 
