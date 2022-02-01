@@ -9,22 +9,24 @@ Compare to the docs:
 
 Code adapted from:
     GPT2: https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/gpt2/
-    labml-ai : https://github.com/labmlai/annotated_deep_learning_paper_implementations
+    labml-ai: https://github.com/labmlai/annotated_deep_learning_paper_implementations
+    Transfomer-XL: https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/transfo_xl/modeling_transfo_xl.py
 """
-
-from transformers import PreTrainedModel, PretrainedConfig
+import torch
 from torch import nn
-from labml_nn.transformers.compressive import RelativeMultiHeadAttention
+from transformers import PreTrainedModel, PretrainedConfig
+from transformers.models.transfo_xl.modeling_transfo_xl import RelPartialLearnableMultiHeadAttn
 
 
 class CompressiveTransformerConfig(PretrainedConfig):
-    def __init__(self, dropout, **kwargs):
+    def __init__(self, dropout_rate, head_size, **kwargs):
         super().__init__(**kwargs)
 
         self.model_type = "compressive_transformer"
         self.is_composition = False
         self.keys_to_ignore_at_inference = []
-        self.dropout = dropout
+        self.dropout_rate = dropout_rate
+        self.head_size = head_size
 
 
 class CompressiveFF(nn.Module):
@@ -86,20 +88,87 @@ class CompressiveFF(nn.Module):
         return ff2
 
 
-class CompressiveBlock(nn.Module):
-    def __init__(self, config, layer_idx=None):
+class CompressiveLayer(nn.Module):
+    """A layer of the Compressive transfomer. It uses the RelPartialLearnableMultiheadAttn
+    from the Transformer-XL and the above defined CompressiveFF.
+
+    Compare to:
+        https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L376
+        https://nn.labml.ai/transformers/compressive/index.html
+
+    Attributes:
+        hidden_size (int): The dimensionality of the encoded sequence between layer (input, output)
+        dropout_rate (int): The rate with which to perform dropout
+        num_attention_heads (int): The number of heads in this layer
+        head_size (int): The size of the current head
+        self_attn (RelPartialLearnableMultiHeadAttn): The Class which applies the relative attention
+        feed_forward: The feed-forward block in this layer
+        norm_self_attn: The norm that will be applied before going through the attention
+    """
+    def __init__(self, config):
+        """Initialize the compressive Layer which performs relative self attention with a corresponding
+        feed-forward block.
+
+        Args:
+            config (CompressiveTransformerConfig): Config with the appropriate values for instantiating
+                the compressiv layer
+        """
         super().__init__()
+
+        # Read appropriate values from config
         self.hidden_size = config.hidden_size
         self.dropout_rate = config.dropout_rate
         self.num_attention_heads = config.num_attention_heads
+        self.head_size = config.head_size
 
-        self.self_attn = RelativeMultiHeadAttention(self.num_attention_heads, self.hidden_size, self.dropout_rate)
+        # Create Layers for the CompressiveTransformer layer
+        self.self_attn = RelPartialLearnableMultiHeadAttn(
+            self.num_attention_heads,
+            self.hidden_size,
+            self.head_size,
+            self.dropout_rate,
+        )
         self.feed_forward = CompressiveFF(config)
-        self.dropout = nn.Dropout(self.dropout_rate)
+        self.norm_self_attn = nn.LayerNorm([self.hidden_size])
+    
+    def _concat_memories(self, input_ids, mem=None, c_mem=None):
+        """ Concatenate the tensors 
 
-    def forward(self, input_ids, past_keys_value=None, attention_mask=None, labels=None):
-        pass
+        Args:
+            input_ids ([type]): [description]
+            mem ([type], optional): [description]. Defaults to None.
+            c_mem ([type], optional): [description]. Defaults to None.
 
+        Returns:
+            [type]: [description]
+        """
+        if mem is None:
+            return input_ids
+        elif c_mem is not None:
+            # TODO: Look at dimension
+            mem = torch.cat((mem, c_mem), dim=0)
+        
+        # TODO how to order norm
+        norm = self.norm_self_attn(mem)
+
+        combined = torch.cat((input_ids, mem), dim=0)
+        return combined
+
+    def forward(self, input_ids, positional_embedding, mem=None, c_mem=None, attention_mask=None, output_attention=False):
+        norm_attn = self.norm_self_attn(input_ids)
+
+        combined = self._concat_memories(norm_attn, mem, c_mem)
+
+        attention_scores = self.self_attn(
+            combined,
+            positional_embedding,
+            attn_mask=attention_mask,
+            output_attention=output_attention
+        )
+
+        feed_forward = self.feed_forward(attention_scores[0])
+        outputs = [feed_forward] + attention_scores[1:]
+        return outputs
 
 
 class CompressiveTransformerPretrainedModel(PreTrainedModel):
