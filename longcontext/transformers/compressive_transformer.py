@@ -28,7 +28,7 @@ from transformers.models.transfo_xl.modeling_transfo_xl import (
 
 
 class CompressiveTransformerConfig(TransfoXLConfig):
-    def __init__(self, c_mem_length=None, **kwargs):
+    def __init__(self, compression_rate=4, c_mem_length=None, **kwargs):
         # Init TransfoXLConfig
         super().__init__(**kwargs)
 
@@ -39,6 +39,7 @@ class CompressiveTransformerConfig(TransfoXLConfig):
 
         # Set properties specific to Compressive transformer
         self.c_mem_length = c_mem_length
+        self.compression_rate = compression_rate
 
         # Rename some of the properties for readability
         self.embedding_size = kwargs.get("d_embed")
@@ -48,6 +49,48 @@ class CompressiveTransformerConfig(TransfoXLConfig):
         self.dropout_rate = kwargs.get("dropout")
         self.num_layers = kwargs.get("n_layers")
         self.clamp_length = kwargs.get("clamp_len")
+
+
+class Conv1dCompression(nn.Module):
+    """One of the compression functions used in the Compressive Layer
+    of a Transformer. It applies a 1d convultion
+
+    Compare to:
+        https://nn.labml.ai/transformers/compressive/index.html
+    
+    Attributes:
+        conv (nn.Conv1d): A 1d-convolution used for compression of old
+            memories
+    """
+    def __init__(self, compression_rate, hidden_size):
+        """[summary]
+
+        Args:
+            compression_rate (int): By which factor the memories need to be compressed
+            hidden_size (int): The size of the tokens in the transformer
+        """
+        super().__init__()
+        self.conv = nn.Conv1d(
+            hidden_size,
+            hidden_size,
+            kernel_size=compression_rate,
+            stride=compression_rate
+        )
+
+    def forward(self, memories):
+        """ Compress Memories with 1d-convolution
+
+        Args:
+            memories (torch.Tensor): The memories we want to compress
+
+        Returns:
+            torch.Tensor: The compressed memories
+        """
+        # TODO: Check shape
+        memories = memories.permute(1, 2, 0)
+        memories = self.conv(memories)
+        memories = memories.permute(2, 0, 1)
+        return memories
 
 
 class CompressiveFF(nn.Module):
@@ -253,14 +296,12 @@ class CompressiveTransformerPretrainedModel(PreTrainedModel):
             raise ValueError("The `init` in config has been set to an unkown initilization")
 
         
-        
-
-
 class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
-        # Get Properties form config for later use
+        # Get Properties form config for later use.
+        # CompressiveTransformerConfig for details
         self.vocab_size = config.vocab_size
         self.embedding_size = config.embedding_size
         self.hidden_size = config.hidden_size
@@ -269,10 +310,11 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         self.cutoffs = config.cutoffs
         self.dropout_rate = config.dropout_rate
         self.num_layers = config.num_layers
-        self.c_mem_length = config.c_mem_length
         self.mem_length = config.mem_length
+        self.c_mem_length = config.c_mem_length
         self.same_length = config.self_length
         self.clamp_length = config.clamp_len
+        self.compression_rate = config.compression_rate
 
         # Initiate word embedding
         self.word_emb = AdaptiveEmbedding(
@@ -331,8 +373,32 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         
         # Compress the oldest memory
         if len(memory[0]) > self.mem_length:
-            # Calculate the number of memories to compress
-            pass
+            # Calculate the number of compressed memories to create
+            num_c_mem = (len(memory[0]) - self.mem_length + self.compression_rate - 1) // self.compression_rate
+
+            # Number of memories to compress
+            num_mem_to_compress = num_c_mem * self.compression_rate
+
+            # Memories that need to be compressed
+            mem_to_compress = []
+
+            # Memories that don't need to be compressed
+            uncompressed_mem = []
+
+            # Split memory into needs to be compressed and doesn't need to be compressed
+            for m in memory:
+                cm, m = torch.split(m, [num_mem_to_compress, len(m) - num_mem_to_compress])
+
+                mem_to_compress.append(cm)
+                uncompressed_mem.append(m)
+            
+            # Assign new memory
+            new_memory = uncompressed_mem
+
+            # Compress appropriate memories
+            new_c_memory = []
+
+
 
     # TODO: mention Input-dimension
     def forward(self,
