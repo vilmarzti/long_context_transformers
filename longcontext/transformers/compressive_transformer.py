@@ -15,22 +15,39 @@ Code adapted from:
 import torch
 from torch import nn
 
-from transformers import PreTrainedModel, PretrainedConfig
-from transformers.models.transfo_xl.modeling_transfo_xl import RelPartialLearnableMultiHeadAttn, AdaptiveEmbedding
+from transformers import (
+    PreTrainedModel,
+    TransfoXLConfig
+)
+
+from transformers.models.transfo_xl.modeling_transfo_xl import (
+    RelPartialLearnableMultiHeadAttn,
+    AdaptiveEmbedding,
+    PositionalEmbedding
+)
 
 
-class CompressiveTransformerConfig(PretrainedConfig):
-    def __init__(self, dropout_rate, head_size, init="uniform", init_range=0.01, init_std=0.02, **kwargs):
+class CompressiveTransformerConfig(TransfoXLConfig):
+    def __init__(self, c_mem_length=None, **kwargs):
+        # Init TransfoXLConfig
         super().__init__(**kwargs)
 
+        # Set necessary properties
         self.model_type = "compressive_transformer"
         self.is_composition = False
         self.keys_to_ignore_at_inference = []
-        self.dropout_rate = dropout_rate
-        self.head_size = head_size
-        self.init = init
-        self.init_range = init_range
-        self.std_init = init_std 
+
+        # Set properties specific to Compressive transformer
+        self.c_mem_length = c_mem_length
+
+        # Rename some of the properties for readability
+        self.embedding_size = kwargs.get("d_embed")
+        self.hidden_size = kwargs.get("d_model")
+        self.head_size = kwargs.get("n_heads")
+        self.num_heads = kwargs.get("n_heads")
+        self.dropout_rate = kwargs.get("dropout")
+        self.num_layers = kwargs.get("n_layers")
+        self.clamp_length = kwargs.get("clamp_len")
 
 
 class CompressiveFF(nn.Module):
@@ -122,12 +139,12 @@ class CompressiveLayer(nn.Module):
         # Read appropriate values from config
         self.hidden_size = config.hidden_size
         self.dropout_rate = config.dropout_rate
-        self.num_attention_heads = config.num_attention_heads
+        self.num_heads = config.num_heads
         self.head_size = config.head_size
 
         # Create Layers for the CompressiveTransformer layer
         self.self_attn = RelPartialLearnableMultiHeadAttn(
-            self.num_attention_heads,
+            self.num_heads,
             self.hidden_size,
             self.head_size,
             self.dropout_rate,
@@ -223,19 +240,177 @@ class CompressiveTransformerPretrainedModel(PreTrainedModel):
         Raises:
             ValueError: If the config doesn't have the appropriate values set
         """
+        # Initialize uniformly
         if self.config.init == "uniform":
             nn.init.uniform_(weight, -self.config.init_range, self.config.init_range)
+        # Initialize with normal around 0 and specified std
         elif self.config.init == "normal":
             nn.init.normal_(weight, 0.0, self.config.init_std)
+        # Raise error if initialization method is not supported
         else:
             raise ValueError("The `init` in config has been set to an unkown initilization")
 
 class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
-        pass
+        super().__init__(config)
+
+        # Get Properties form config for later use
+        self.vocab_size = config.vocab_size
+        self.embedding_size = config.embedding_size
+        self.hidden_size = config.hidden_size
+        self.num_heads = config.num_heads
+        self.head_size = config.head_size
+        self.cutoffs = config.cutoffs
+        self.dropout_rate = config.dropout_rate
+        self.num_layers = config.num_layers
+        self.c_mem_length = config.c_mem_length
+        self.mem_length = config.mem_length
+        self.same_length = config.self_length
+        self.clamp_length = config.clamp_len
+
+        # Initiate word embedding
+        self.word_emb = AdaptiveEmbedding(
+            self.vocab_size,
+            self.embedding_size,
+            self.hidden_size,
+            self.cutoffs,
+            div_val=config.div_val
+        )
+
+        # Dropout layer for later use
+        self.drop = nn.Dropout(self.dropout_rate)
+
+        # Add layers to the model
+        self.layers = nn.ModuleList()
+        for _ in range(self.num_layers):
+            self.layers.append(CompressiveLayer(config))
+
+        # Add positional embedding (as described in original Transformer-XL paper)
+        self.pos_embedding = PositionalEmbedding(self.hidden_size)
+
+        self.post_init()
     
-    def forward(self, input_ids, attention_masks):
-        pass
+    def init_memories(self, memory_size, batch_size):
+        if memory_size > 0:
+            # Initialize memory and read parameters for checking
+            # Device and dtype
+            memory = []
+            param = next(self.parameters)
+
+            # Fill Memory with zeros
+            for _ in range(self.num_layers):
+                memory.append(
+                    torch.zeros(
+                        memory_size,
+                        batch_size,
+                        self.hidden_size,
+                        dtype=param.dtype,
+                        device=param.device
+                    )
+                )
+            return memory
+        else:
+            return None
+
+    def forward(self,
+        input_ids,
+        mems=None,
+        c_mems=None,
+        head_mask=None,
+        attention_mask=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None
+    ):
+        # Set output_attentions if not passed into function
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+
+        # Set output_hidden_states if not passed into function
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+
+        # Set return_dict value if not passed into function
+        return_dict = return_dict if return_dict is not None else self.config.return_dict
+
+        # Transpose for unified library interface. See comment in TransfoXLModel
+        if input_ids is not None:
+            input_ids = input_ids.transpose(0, 1).contigous()
+            query_length, batch_size = input_ids.shape
+        else:
+            raise ValueError("input_ids has to be specified for forward pass")
+        
+        # Initialize memories if not given
+        if mems is None:
+            mems = self.init_memories(self.mem_length, batch_size)
+        
+        # Intialize compressed memories if not given
+        if c_mems is None:
+            c_mems = self.init_memories(self.c_mem_length, batch_size)
+
+        # Get head_mask into appropriate size. Currently only one dimension is supported
+        # That means that we disable the heads for all layers in the same way
+        if head_mask is not None and head_mask.dim == 1:
+            head_mask = head_mask.unsqueeze(0).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+            head_mask = head_mask.expand(self.n_layer, -1, -1, -1, -1)
+        else:
+            head_mask = [None] * self.num_layers
+
+        # Put input_ids into embeddings
+        input_embeddings = self.word_emb(input_ids)
+
+        # TODO: Check following if-clause of the code and how attention_masks work
+        # Resources:
+        #   https://medium.com/analytics-vidhya/masking-in-transformers-self-attention-mechanism-bad3c9ec235c
+        # 
+
+        # Get appropriate memory lengths. This is necessary if the parameters mems/c_mems
+        # Are not given (i.e. they are passed as None)
+        mem_length = mems[0].size(0) if mems is not None else 0
+        c_mem_length = c_mems[0].size(0) if c_mems is not None else 0
+        key_length = mem_length + c_mem_length + query_length
+
+        # If we use the same attention length for all tokens
+        # Taken from the source code of the TransfoXLConfig
+        if self.same_length and attention_mask is None:
+            # Get tensor of shape [query_length, key_length] with the device set the same as the
+            # input embeddings
+            all_ones = input_embeddings.new_ones(
+                (query_length, key_length),
+                dtype=torch.uint8
+            )
+
+            # TODO: Is it really the mask length
+            # Get the length of the mask
+            mask_length = key_length - self.mem_length - self.c_mem_length
+
+            # TODO: Why shift?
+            if mask_length > 0:
+                mask_shift_len = query_length - mask_length
+            else:
+                mask_shift_len = query_length
+
+            # TODO: Check attention mask (sum of upper and lower triangular matrix?)
+            # Get the attention mask
+            attention_mask = (
+                torch.triu(all_ones, 1 + mask_length) + 
+                torch.tril(all_ones, -mask_shift_len)
+            )[:, :, None]
+
+        # If attention_mask is already provided, do nothing
+        elif attention_mask is not None:
+            pass
+
+        # If same_length for all tokens is not set
+        else:
+            attention_mask = torch.triu(
+                input_embeddings.new_ones(
+                    (query_length, key_length),
+                    dtype=torch.uint8
+                ),
+                diagonal=1 + mem_length + c_mem_length
+            )[:, :, None]
+        
 
 class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
