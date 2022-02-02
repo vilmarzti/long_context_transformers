@@ -14,12 +14,13 @@ Code adapted from:
 """
 import torch
 from torch import nn
+
 from transformers import PreTrainedModel, PretrainedConfig
-from transformers.models.transfo_xl.modeling_transfo_xl import RelPartialLearnableMultiHeadAttn
+from transformers.models.transfo_xl.modeling_transfo_xl import RelPartialLearnableMultiHeadAttn, AdaptiveEmbedding
 
 
 class CompressiveTransformerConfig(PretrainedConfig):
-    def __init__(self, dropout_rate, head_size, **kwargs):
+    def __init__(self, dropout_rate, head_size, init="uniform", init_range=0.01, init_std=0.02, **kwargs):
         super().__init__(**kwargs)
 
         self.model_type = "compressive_transformer"
@@ -27,6 +28,9 @@ class CompressiveTransformerConfig(PretrainedConfig):
         self.keys_to_ignore_at_inference = []
         self.dropout_rate = dropout_rate
         self.head_size = head_size
+        self.init = init
+        self.init_range = init_range
+        self.std_init = init_std 
 
 
 class CompressiveFF(nn.Module):
@@ -192,13 +196,39 @@ class CompressiveLayer(nn.Module):
 
 
 class CompressiveTransformerPretrainedModel(PreTrainedModel):
+    """The base class of the Commpressive Transformer Model
+
+    Compare to:
+        https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L464
+
+    Class Attributes:
+        config_class (PreTrainedconfig): The type of config this Model accepts
+        is_parallelizable (bool): Whether this Model support parallelization.
+        base_model_prefix (str): The identifier of the base-model
+        main_input_name (str): How to identify the main input
+    """
     config_class = CompressiveTransformerConfig
+    is_parallelizable = False
+    base_model_prefix = "transformer"
+    main_input_name = "input_ids"
 
-    def __init__(self, *inputs, **kwargs):
-        super().__init__(*inputs, **kwargs)
+    def _init_weights(self, weight):
+        """How to initialize the weights in this model. We can either do it 
+        through a normal-function or initialize uniformly. This function is
+        typically called through `self.apply(self._init_weights)`
 
-    def _init_weights():
-        pass
+        Args:
+            weight (torch layer): The layer we want to initialize
+
+        Raises:
+            ValueError: If the config doesn't have the appropriate values set
+        """
+        if self.config.init == "uniform":
+            nn.init.uniform_(weight, -self.config.init_range, self.config.init_range)
+        elif self.config.init == "normal":
+            nn.init.normal_(weight, 0.0, self.config.init_std)
+        else:
+            raise ValueError("The `init` in config has been set to an unkown initilization")
 
 class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
