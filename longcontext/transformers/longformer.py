@@ -2,6 +2,10 @@
     This module contains the class for the LongFormerWithLMHead
     as the current LongFormer model does not support
     autoregressive language modeling
+
+    Resource for autoregressive:
+        https://github.com/neqkir/attention-mechanism
+        `Left-ward flow`in Attention is all you need
 """
 from transformers import LongformerPreTrainedModel
 from torch import nn

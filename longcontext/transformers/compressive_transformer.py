@@ -432,7 +432,6 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         Compare to:
             https://nn.labml.ai/transformers/compressive/experiment.html
 
-
         Args:
             memory (List[torch.Tensor]): Old memory from the previous step
             compressed_memory (List[torch.Tensor]): Old compressed memory from
