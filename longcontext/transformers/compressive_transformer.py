@@ -89,6 +89,7 @@ class CompressiveFF(nn.Module):
         self.dropout = nn.Dropout(self.dropout_rate)
         self.activation = nn.ReLU()
 
+    # TODO: Input dimensions
     def forward(self, hidden_states):
         """ Apply the FeedForward block
 
@@ -178,6 +179,7 @@ class CompressiveLayer(nn.Module):
 
         return combined
 
+    # TODO: Input dimensions
     def forward(self, input_ids, positional_embedding, mem=None, c_mem=None, attention_mask=None, output_attention=False):
         """Forward pass thorught this Compressive Transformer layer
 
@@ -250,6 +252,10 @@ class CompressiveTransformerPretrainedModel(PreTrainedModel):
         else:
             raise ValueError("The `init` in config has been set to an unkown initilization")
 
+        
+        
+
+
 class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -278,7 +284,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         )
 
         # Dropout layer for later use
-        self.drop = nn.Dropout(self.dropout_rate)
+        self.dropout = nn.Dropout(self.dropout_rate)
 
         # Add layers to the model
         self.layers = nn.ModuleList()
@@ -311,7 +317,24 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             return memory
         else:
             return None
+        
+    @torch.no_grad()
+    def merge_and_compress(self, memory, compressed_memory, new_memory):
+        if memory is None and new_memory is None:
+            return None, None
+        
+        # Concatenate old memories with new memories
+        if memory:
+            memory = [torch.cat((m, x), dim=0) for m, x in zip(memory, new_memory)]
+        else:
+            memory = new_memory
+        
+        # Compress the oldest memory
+        if len(memory[0]) > self.mem_length:
+            # Calculate the number of memories to compress
+            pass
 
+    # TODO: mention Input-dimension
     def forward(self,
         input_ids,
         mems=None,
@@ -411,6 +434,89 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 diagonal=1 + mem_length + c_mem_length
             )[:, :, None]
         
+        # PREPARE FORWARD-PASS
+
+        # Create a tensor with the given positions
+        position_sequence = torch.arange(
+            key_length, # length
+            -1,         # start
+            -1,         # step
+            -1.0,       # TODO: what parameter is this? Check what happens if removed
+            device=input_embeddings.device,
+            dtype=input_embeddings.dtype
+        )
+
+        # Clamp to clamp_length
+        if self.clamp_length > 0:
+            position_sequence.clamp_(max=self.clamp_length)
+
+        # Get positional embedding
+        position_embeddings = self.pos_embedding(position_sequence)
+
+        # Apply dropout to positional-/word-embeddings
+        input_embeddings = self.dropout(input_embeddings)
+        position_embeddings = self.dropout(position_embeddings)
+
+        # FORWARD_PASS
+
+        hidden_state = input_embeddings
+        hidden_states = [] if output_hidden_states else None
+        attentions = [] if output_attentions else None
+        for i, layer in enumerate(self.layers):
+            # Save hidden state
+            if output_hidden_states:
+                hidden_states.append(hidden_state)
+
+            # Get appropriate (compressed) memory for the given layer
+            current_memory = None if mems is None else mems[i]
+            current_c_memory = None if c_mems is None else c_mems[i]
+
+            # Pass through layer
+            layer_output = layer(
+                input_embeddings,
+                position_embeddings,
+                mem=current_memory,
+                c_mem=current_c_memory,
+                attention_mask=attention_mask,
+                output_attentions=output_attentions
+            )
+
+            # Get the hidden state for the next layer
+            hidden_state = layer_output[0]
+
+            # Add attention if it is needed in output
+            if output_attentions:
+                attentions.append(layer_output[1])
+        
+        # Apply dropout before outputting
+        final_output = self.dropout(hidden_state)
+
+        # Process hidden states if part of output
+        if output_hidden_states:
+            hidden_states.append(hidden_state)
+            # Set up for library standard shape [bsz, len, hidden_dim]
+            hidden_states = tuple(v.transpose(1, 0).contiguous() for v in hidden_states)
+
+        # Process attentions if part of output
+        if output_attentions:
+            # Transpose to library standard shape [bsz, n_heads, query_seq_len, key_seq_len]
+            attentions = tuple(t.permute(2, 3, 0, 1).contiguous() for t in attentions)
+        
+        # Process output to library standard shape
+        final_output = final_output.transpose(1, 0).contiguous()
+
+        # Create new memories from the computed hidden states
+        new_mems, new_c_mems = self.merge_and_compress(mems, c_mems, hidden_states)
+
+        # One version of the output
+        if not return_dict:
+            return tuple(v for v in [final_output, new_mems, new_c_mems, hidden_states, attentions] if v is not None)
+        
+        # TODO: CompressiveTransformer specific output-dict
+
+
+
+
 
 class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
