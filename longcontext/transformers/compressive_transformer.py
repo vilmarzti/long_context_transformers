@@ -176,7 +176,7 @@ class CompressiveLayer(nn.Module):
 
         Args:
             config (CompressiveTransformerConfig): Config with the appropriate values for instantiating
-                the compressiv layer
+                the compressiv layer. Check The class definition for further explanations
         """
         super().__init__()
 
@@ -185,6 +185,10 @@ class CompressiveLayer(nn.Module):
         self.dropout_rate = config.dropout_rate
         self.num_heads = config.num_heads
         self.head_size = config.head_size
+        self.compression_rate = config.compression_rate
+
+        # Create Compression function
+        self.compression = Conv1dCompression(self.compression_rate, self.hidden_size)
 
         # Create Layers for the CompressiveTransformer layer
         self.self_attn = RelPartialLearnableMultiHeadAttn(
@@ -397,7 +401,23 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
             # Compress appropriate memories
             new_c_memory = []
+            for i, layer in enumerate(self.layers):
+                new_c_memory = layer.compress(mem_to_compress[i])
+            
+            # After compressing, concat with old compressed
+            if compressed_memory:
+                compressed_memory = [torch.cat([m, nm], dim=0) for m, nm in zip(compressed_memory, new_c_memory)]
+            else:
+                compressed_memory = new_c_memory 
 
+            # Truncate compressed memory to given length
+            if len(compressed_memory[0]) > self.c_mem_length:
+                compressed_memory = [m[-self.c_mem_length:] for m in compressed_memory]#
+        else:
+            mem_to_compress = []
+
+        # Also return the mem_to_compress for Reconstruction loss
+        return new_memory, compressed_memory, mem_to_compress
 
 
     # TODO: mention Input-dimension
@@ -572,16 +592,13 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         final_output = final_output.transpose(1, 0).contiguous()
 
         # Create new memories from the computed hidden states
-        new_mems, new_c_mems = self.merge_and_compress(mems, c_mems, hidden_states)
+        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(mems, c_mems, hidden_states)
 
         # One version of the output
         if not return_dict:
-            return tuple(v for v in [final_output, new_mems, new_c_mems, hidden_states, attentions] if v is not None)
+            return tuple(v for v in [final_output, new_mems, new_c_mems, mem_to_compress, hidden_states, attentions] if v is not None)
         
         # TODO: CompressiveTransformer specific output-dict
-
-
-
 
 
 class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
