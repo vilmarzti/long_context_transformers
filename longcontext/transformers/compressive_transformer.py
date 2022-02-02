@@ -28,7 +28,29 @@ from transformers.models.transfo_xl.modeling_transfo_xl import (
 
 
 class CompressiveTransformerConfig(TransfoXLConfig):
+    """The configuration for the Compressive transformer. As most of the 
+    Code for the C-transformer is taken from the Transfomer-XL implementation
+    of Huggingface, the config is very similar.
+
+    Compare to:
+        https://huggingface.co/docs/transformers/model_doc/transfo-xl#transformers.TransfoXLConfig
+
+    Attributes:
+        c_mem_length (int): How many instances of compressed memory there
+            are.
+        compression_rate (int): How strongly the memories get compressed
+    """
     def __init__(self, compression_rate=4, c_mem_length=None, **kwargs):
+        """See Class doc-string for further information
+
+        Args:
+            compression_rate (int, optional): By which factors the memories get
+                compressed. Defaults to 4.
+            c_mem_length (int, optional): How many instances of compressed
+                memory there are. Defaults to None.
+            kwargs (dict): Additional settings for the TransfoXLConfig or 
+                pretrained config.
+        """
         # Init TransfoXLConfig
         super().__init__(**kwargs)
 
@@ -167,8 +189,10 @@ class CompressiveLayer(nn.Module):
         num_attention_heads (int): The number of heads in this layer
         head_size (int): The size of the current head
         self_attn (RelPartialLearnableMultiHeadAttn): The Class which applies the relative attention
-        feed_forward: The feed-forward block in this layer
-        norm_self_attn: The norm that will be applied before going through the attention
+        feed_forward (nn.Module): The feed-forward block in this layer
+        norm_self_attn (nn.Module): The norm that will be applied before going through the attention
+        compression (nn.Module): The compression function that compresses new memories. Currently only
+            1d-convolution is supported
     """
     def __init__(self, config):
         """Initialize the compressive Layer which performs relative self attention with a corresponding
@@ -301,7 +325,30 @@ class CompressiveTransformerPretrainedModel(PreTrainedModel):
 
         
 class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
+    """The base model for the Compressive Transformer. This will be used by 
+    other models further down the line
+
+    Args:
+        config_args (any): Config settings that are saved by the model for 
+            later usage. See the CompressiveTransformerConfig and the 
+            TransfoXLConfig for further details.
+        word_emb (nn.Module): Embedding layer for the tokens that get fed into
+            the transformer
+        dropout (nn.Module): The dropout layer that is applied to the input-/
+            positional embeddings.
+        layers (nn.ModuleList): List of the compressive layers in this transformer
+        pos_embedding (nn.Module): A module that creates the tensors for the 
+            positional embedding.
+        
+    """
     def __init__(self, config):
+        """ Initialize properties and layers from a config
+
+        Args:
+            config (CompressiveTransformerConfig):See the 
+                CompressiveTransformerConfig and the TransfoXLConfig for further 
+                details.
+        """
         super().__init__(config)
 
         # Get Properties form config for later use.
@@ -343,6 +390,19 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         self.post_init()
     
     def init_memories(self, memory_size, batch_size):
+        """Initialize memory tensors with appropriate size
+
+        Compare to:
+            https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L839
+
+        Args:
+            memory_size (int): How many instances of this memory there are.
+            batch_size (int): The batch_size of the current run.
+
+        Returns:
+            List[torch.Tensor]: A list of tensors which are filled by zeros.
+            TODO: shape of return value
+        """
         if memory_size > 0:
             # Initialize memory and read parameters for checking
             # Device and dtype
@@ -366,6 +426,27 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         
     @torch.no_grad()
     def merge_and_compress(self, memory, compressed_memory, new_memory):
+        """ Merge the current memory and compressed memory with the new memory.
+        Apply compression if necessary.
+
+        Compare to:
+            https://nn.labml.ai/transformers/compressive/experiment.html
+
+
+        Args:
+            memory (List[torch.Tensor]): Old memory from the previous step
+            compressed_memory (List[torch.Tensor]): Old compressed memory from
+                the previous step.
+            new_memory ([type]): The new hidden states that should be added to 
+                the memory.
+
+        Returns:
+            (List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]): A 
+            3-tuple that consists of the new (uncompressed) memory, the new
+            compressed memory and the memories that have been compressed. 
+            The last part of this tuple is needed for the attention-reconstruction
+            loss
+        """
         if memory is None and new_memory is None:
             return None, None
         
@@ -420,17 +501,36 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         return new_memory, compressed_memory, mem_to_compress
 
 
-    # TODO: mention Input-dimension
-    def forward(self,
-        input_ids,
-        mems=None,
-        c_mems=None,
-        head_mask=None,
-        attention_mask=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None
-    ):
+    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=False):
+        """ The forward pass in the base Compressive Transformer layer
+
+        TODO: mention Input-dimension
+        Args:
+            input_ids (torch.Tensor): Tensor with input ids from tokenization
+            mems (List[torch.Tensor], optional): The previous hidden states as
+                a list, where each entry corresponds to a layer. Defaults to None.
+            c_mems (List[torch.Tensor], optional): The previous compressed hidden
+                states. A list with torch.Tensor's where each entry corresponds 
+                to a layer Defaults to None.
+            head_mask (torch.Tensor, optional): The mask that says which heads
+                exclude. Defaults to None.
+            attention_mask (torch.Tensor, optional): Tensor that says which 
+                tokens are padding and should be ignored. 1 for keep and 0
+                for ignore. Defaults to None.
+            output_attentions (bool, optional): Whether to output the attention
+                scores. Defaults to False.
+            output_hidden_states (bool, optional): Whether to output the hidden
+                states . Defaults to False.
+            return_dict (bool, optional): Whether the output should be a dict
+                or a tuple. If true a dict is returned. Defaults to False.
+
+        Raises:
+            ValueError: If no input_ids have been supplied
+
+        TODO: Prepare dict class and modify next lines.
+        Returns:
+            dict or tuple: The calculated values.
+        """
         # Set output_attentions if not passed into function
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
 
