@@ -504,6 +504,10 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
     def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=False):
         """ The forward pass in the base Compressive Transformer layer
 
+        Compare to:
+            https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L878
+            https://nn.labml.ai/transformers/compressive/index.html
+
         TODO: mention Input-dimension
         Args:
             input_ids (torch.Tensor): Tensor with input ids from tokenization
