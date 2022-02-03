@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 from transformers import (
-    PreTrainedModel,
-    TransfoXLConfig
+    TransfoXLConfig,
+    TransfoXLPreTrainedModel
 )
 
 from transformers.models.transfo_xl.modeling_transfo_xl import (
@@ -25,6 +25,8 @@ from transformers.models.transfo_xl.modeling_transfo_xl import (
     AdaptiveEmbedding,
     PositionalEmbedding
 )
+
+from transformers.models.transfo_xl.modeling_transfo_xl_utilities import ProjectedAdaptiveLogSoftmax
 
 
 class CompressiveTransformerConfig(TransfoXLConfig):
@@ -66,7 +68,7 @@ class CompressiveTransformerConfig(TransfoXLConfig):
         # Rename some of the properties for readability
         self.embedding_size = kwargs.get("d_embed")
         self.hidden_size = kwargs.get("d_model")
-        self.head_size = kwargs.get("n_heads")
+        self.head_size = kwargs.get("d_heads")
         self.num_heads = kwargs.get("n_heads")
         self.dropout_rate = kwargs.get("dropout")
         self.num_layers = kwargs.get("n_layers")
@@ -85,7 +87,7 @@ class Conv1dCompression(nn.Module):
             memories
     """
     def __init__(self, compression_rate, hidden_size):
-        """[summary]
+        """Initialize the 1dConvolution that compresses the memory
 
         Args:
             compression_rate (int): By which factor the memories need to be compressed
@@ -285,10 +287,12 @@ class CompressiveLayer(nn.Module):
         return outputs
 
 
-class CompressiveTransformerPretrainedModel(PreTrainedModel):
-    """The base class of the Commpressive Transformer Model
+class CompressiveTransformerPretrainedModel(TransfoXLPreTrainedModel):
+    """The base class of the Commpressive Transformer Model it inherits from
+    the TransfoXLPretrainedModel
 
     Compare to:
+
         https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L464
 
     Class Attributes:
@@ -301,29 +305,9 @@ class CompressiveTransformerPretrainedModel(PreTrainedModel):
     is_parallelizable = False
     base_model_prefix = "transformer"
     main_input_name = "input_ids"
+    load_tf_weights = None
 
-    def _init_weights(self, weight):
-        """How to initialize the weights in this model. We can either do it 
-        through a normal-function or initialize uniformly. This function is
-        typically called through `self.apply(self._init_weights)`
 
-        Args:
-            weight (torch layer): The layer we want to initialize
-
-        Raises:
-            ValueError: If the config doesn't have the appropriate values set
-        """
-        # Initialize uniformly
-        if self.config.init == "uniform":
-            nn.init.uniform_(weight, -self.config.init_range, self.config.init_range)
-        # Initialize with normal around 0 and specified std
-        elif self.config.init == "normal":
-            nn.init.normal_(weight, 0.0, self.config.init_std)
-        # Raise error if initialization method is not supported
-        else:
-            raise ValueError("The `init` in config has been set to an unkown initilization")
-
-        
 class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
     """The base model for the Compressive Transformer. This will be used by 
     other models further down the line
@@ -706,7 +690,54 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
 class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
-        pass
+        super().__init__()
 
-    def forward(self, input_ids, attention_masks, labels):
-        pass
+        self.transformer = CompressiveTransfomerModel(config)
+
+        self.sample_softmax = config.sample_softmax
+
+        # Create an addaptive Softmax layer
+        self.crit = ProjectedAdaptiveLogSoftmax(
+            config.vocab_size,
+            config.embedding_size,
+            config.inner_size,
+            config.cutoffs,
+            config.div_val
+        )
+
+        self.post_init()
+
+    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=False, labels=None):
+        # Decide whether to return a dict or a tuple
+        return_dict = return_dict if return_dict is not None else self.config.return_dict
+
+        if input_ids is not None:
+            batch_size = input_ids.size[0]
+            sequence_length =  input_ids.size[1]
+        
+        # Forward pass through base Compressive Transformer
+        transformer_output = self.transformer(
+            input_ids,
+            mems=mems,
+            c_mems=c_mems,
+            head_mask=head_mask,
+            attention_mask=attention_mask,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict
+        )
+
+        last_hidden_state = transformer_output[0]
+        prediction_hidden = last_hidden_state[:, -sequence_length:]
+
+        softmax_output = self.crit(prediction_hidden, labels)
+
+        prediction_scores = softmax_output.view(batch_size, sequence_length, -1) if labels is None else ()
+        loss = softmax_output.view(batch_size, sequence_length - 1) if labels is not None else None
+
+        if not return_dict:
+            output = (prediction_scores,) + transformer_output[1:]
+            return ((loss,) + output) if loss is not None else output
+
+        # TODO: config output
+
