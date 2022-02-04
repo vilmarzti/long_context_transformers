@@ -13,7 +13,11 @@ Code adapted from:
     Transfomer-XL: https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/transfo_xl/modeling_transfo_xl.py
 """
 import torch
+import torch.nn.functional as F
 from torch import nn
+
+from dataclasses import dataclass
+from typing import List
 
 from transformers import (
     TransfoXLConfig,
@@ -21,9 +25,12 @@ from transformers import (
 )
 
 from transformers.models.transfo_xl.modeling_transfo_xl import (
+    PositionwiseFF,
     RelPartialLearnableMultiHeadAttn,
     AdaptiveEmbedding,
-    PositionalEmbedding
+    PositionalEmbedding,
+    TransfoXLModelOutput,
+    TransfoXLLMHeadModelOutput,   
 )
 
 from transformers.models.transfo_xl.modeling_transfo_xl_utilities import ProjectedAdaptiveLogSoftmax
@@ -75,6 +82,37 @@ class CompressiveTransformerConfig(TransfoXLConfig):
         self.clamp_length = kwargs.get("clamp_len")
 
 
+@dataclass
+class CompressiveTransformerModelOutput(TransfoXLModelOutput):
+    """Base Class for CompressiveTransformerModel output. It inherits from the
+    TransfoXLModelOutput and adds a field for the compressed Memory
+
+    Compare to:
+        https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L606
+
+    Additional Args:
+        c_mem (List[torch.FloatTensor]): A list with the compressed memories for 
+            each layer in the C-Transformer
+
+    """
+    c_mems: List[torch.FloatTensor] = None
+
+@dataclass
+class CompressiveTransformerLMHeadModelOutput(TransfoXLLMHeadModelOutput):
+    """Base class for CompressiveTransformerLMHeadModel output. It inherits
+    from the TransfoXLLMHeadModelOutput and adds a field for the compressed
+    memory.
+
+    Compare to:
+        https://github.com/huggingface/transformers/blob/4167519c3efa0f0fe867e82abe32c141147e0675/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L671
+
+    Additional Args:
+        c_mem (List[torch.FloatTensor]): A list with the compressed memories for
+        each layer in the Compressive Transformer
+    """
+    c_mems: List[torch.FloatTensor] = None
+
+
 class Conv1dCompression(nn.Module):
     """One of the compression functions used in the Compressive Layer
     of a Transformer. It applies a 1d convultion
@@ -116,66 +154,36 @@ class Conv1dCompression(nn.Module):
         memories = memories.permute(2, 0, 1)
         return memories
 
+class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
+    def content_based_attention(self, sequence):
+        query_length = sequence.size(0)
+        batch_size = sequence.size(1)
 
-class CompressiveFF(nn.Module):
-    """This class implements the Feedforward block of the Compressive
-    Transformer block. It has two linear layers and an activation, dropout
-    in between.
 
-    Compare to: 
-        https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/master/labml_nn/transformers/feed_forward.py
-        https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/gpt2/modeling_gpt2.py#L349
-    
-    Attributes:
-        hidden_size (int): The input dimension to the Feedforward block
-        n_inner (int): The dimension the input expands to
-        dropout_rate (int): The dropout rate in between the linear layers
-        ff_1 (nn.Linear): The first linear layer
-        ff_2 (nn.Linear): The second linear layer
-        dropout (nn.Dropout): The dropout layer applied after the first linear layer
-        activation (nn.ReLU): Relu applied after first linear layer
-    """
+        if self.pre_lnorm:
+            w_heads = self.qkv_net(self.layer_norm(sequence))
+        else:
+            w_heads = self.qkv_net(sequence)
+        
+        w_head_q, w_head_k, w_head_v = torch.chunk(w_heads, 3, dim=-1)
 
-    def __init__(self, config):
-        """ Read config for creating the appropriate layers
+        key_length = w_head_k.size(0)
 
-        Args:
-            config (CompressiveTransformerConfig): Config with the values for the FF-block.
-                It should contain the values hidden_size, n_inner and config_rate
-        """
-        super().__init__()
+        # TODO: check shapes
+        w_head_q = w_head_q.view(query_length, batch_size, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
+        w_head_k = w_head_k.view(key_length, batch_size, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
+        w_head_v = w_head_v.view(key_length, batch_size, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
 
-        # Save appropriate Values
-        self.hidden_size = config.hidden_size
-        self.n_inner = config.n_inner if config.n_inner is not None else config.hidden_size * 4
-        self.dropout_rate = config.dropout_rate
+        attn_score = torch.einsum("ibnd,jbnd->ijbn", (w_head_q, w_head_k))
 
-        # Create Layers for FeedForward-block
-        self.ff_1 = nn.Linear(self.hidden_size, self.n_inner)
-        self.ff_2 = nn.Linear(self.n_inner, self.hidden_size)
-        self.dropout = nn.Dropout(self.dropout_rate)
-        self.activation = nn.ReLU()
+        attn_prob = F.softmax(attn_score, dim=1)
 
-    # TODO: Input dimensions
-    def forward(self, hidden_states):
-        """ Apply the FeedForward block
+        attn_vec = torch.einsum("ijbn,jbnd->ibnd", (attn_prob, w_head_v))
 
-        Args:
-            hidden_states (torch.tensor): The intermediate values in a compressive Transforer block
+        # TODO: check shape
+        attn_vec = attn_vec.contiguous().view(attn_vec.size(0), attn_vec.size(1), self.n_head * self.d_head)
 
-        Returns:
-            torch.tensor: The values after the feed-forward block is applied
-        """
-        # Apply pass through first linear layer
-        ff1 = self.activation(self.ff_1(hidden_states))
-
-        # add dropout
-        dropout = self.dropout(ff1)
-
-        # Pass through second linear layer 
-        ff2 = self.ff2(dropout)
-        return ff2
-
+        return attn_vec
 
 class CompressiveLayer(nn.Module):
     """A layer of the Compressive transfomer. It uses the RelPartialLearnableMultiheadAttn
@@ -217,13 +225,13 @@ class CompressiveLayer(nn.Module):
         self.compression = Conv1dCompression(self.compression_rate, self.hidden_size)
 
         # Create Layers for the CompressiveTransformer layer
-        self.self_attn = RelPartialLearnableMultiHeadAttn(
+        self.self_attn = RelativeMultiheadAttention(
             self.num_heads,
             self.hidden_size,
             self.head_size,
             self.dropout_rate,
         )
-        self.feed_forward = CompressiveFF(config)
+        self.feed_forward = PositionwiseFF(config)
         self.norm_self_attn = nn.LayerNorm([self.hidden_size])
     
     def _concat_memories(self, input_ids, mem=None, c_mem=None):
@@ -292,7 +300,6 @@ class CompressiveTransformerPretrainedModel(TransfoXLPreTrainedModel):
     the TransfoXLPretrainedModel
 
     Compare to:
-
         https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L464
 
     Class Attributes:
@@ -408,6 +415,40 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         else:
             return None
         
+    def calculate_reconstruction_loss(self, layer, hidden_state, memory):
+        # Detach embeddings and memories
+        hidden_state = hidden_state.detach()
+        memory = memory.detach()
+
+        # Compress the current memory with the given layer
+        c_memory = layer.compression(memory)
+
+        # Perform detached normalization of h_state memory and c_memory
+        hidden_state, memory, c_memory = (
+            F.layer_norm(
+                embed,
+                layer.norm_self_attn.normalized_shape,
+                weight=layer.norm_self_attn.weight.detach(),
+                bias=layer.norm_self_attn.bias.detach(),
+                eps=layer.norm_self_attn.eps
+            ) for embed in [hidden_state, memory, c_memory]
+        )
+
+        # TODO: Implement use of content-base attention 
+        # Also see: https://nn.labml.ai/transformers/compressive/index.html
+        attention_layer: RelPartialLearnableMultiHeadAttn = layer.self_attn.detach()
+
+    def attention_reconstruction_loss(self, hidden_states, memories):
+        losses = []
+        for i, layer in enumerate(self.layers):
+            losses.append(self.calculate_reconstruction_loss(
+                layer,
+                hidden_states[i],
+                memories[i]
+            ))
+
+        return torch.sum(losses)
+        
     @torch.no_grad()
     def merge_and_compress(self, memory, compressed_memory, new_memory):
         """ Merge the current memory and compressed memory with the new memory.
@@ -514,9 +555,9 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         Raises:
             ValueError: If no input_ids have been supplied
 
-        TODO: Prepare dict class and modify next lines.
         Returns:
-            dict or tuple: The calculated values.
+            (CompressiveTransformerModelOutput or tuple): The calculated values. 
+            See CompressiveTransformerModelOutput for values that get returned
         """
         # Set output_attentions if not passed into function
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -631,7 +672,6 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         position_embeddings = self.dropout(position_embeddings)
 
         # FORWARD_PASS
-
         hidden_state = input_embeddings
         hidden_states = [] if output_hidden_states else None
         attentions = [] if output_attentions else None
@@ -685,7 +725,13 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         if not return_dict:
             return tuple(v for v in [final_output, new_mems, new_c_mems, mem_to_compress, hidden_states, attentions] if v is not None)
         
-        # TODO: CompressiveTransformer specific output-dict
+        return CompressiveTransformerModelOutput(
+            last_hidden_state=final_output,
+            mems=new_mems,
+            c_mems=new_c_mems,
+            hidden_states=hidden_states,
+            attentions=attentions
+        )
 
 
 class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
@@ -739,5 +785,11 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             output = (prediction_scores,) + transformer_output[1:]
             return ((loss,) + output) if loss is not None else output
 
-        # TODO: config output
-
+        return CompressiveTransformerLMHeadModelOutput(
+            losses=loss,
+            prediction_scores=prediction_scores,
+            mems=transformer_output.mems,
+            hidden_states=transformer_output.hidden_states,
+            attentions=transformer_output.attentions,
+            c_mems=transformer_output.c_mems 
+        )
