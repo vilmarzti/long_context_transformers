@@ -74,14 +74,6 @@ class CompressiveTransformerConfig(TransfoXLConfig):
         self.c_mem_length = c_mem_length
         self.compression_rate = compression_rate
 
-        # Rename some of the properties for readability
-        self.embedding_size = self.d_embed
-        self.hidden_size = self.d_head
-        self.num_heads = self.n_head
-        self.dropout_rate = self.dropout
-        self.num_layers = self.n_layer
-        self.clamp_length = self.clamp_len
-
 
 @dataclass
 class CompressiveTransformerModelOutput(TransfoXLModelOutput):
@@ -217,7 +209,6 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
 
         return attn_vec
 
-
 class CompressiveLayer(nn.Module):
     """A layer of the Compressive transfomer. It uses the RelPartialLearnableMultiheadAttn
     from the Transformer-XL and the above defined CompressiveFF.
@@ -238,7 +229,7 @@ class CompressiveLayer(nn.Module):
             1d-convolution is supported
     """
 
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         """Initialize the compressive Layer which performs relative self attention with a corresponding
         feed-forward block.
 
@@ -249,24 +240,41 @@ class CompressiveLayer(nn.Module):
         super().__init__()
 
         # Read appropriate values from config
-        self.hidden_size = config.hidden_size
-        self.dropout_rate = config.dropout_rate
-        self.num_heads = config.num_heads
+        self.dropout_rate = config.dropout
+        self.n_head = config.n_head
+        self.d_head = config.d_head
+        self.d_model = config.d_model
+        self.d_inner = config.d_inner
+        self.lnorm_epsilon = config.layer_norm_epsilon
         self.compression_rate = config.compression_rate
+        self.pre_lnorm = config.pre_lnorm
 
         # Create Compression function
         self.compression = Conv1dCompression(
-            self.compression_rate, self.hidden_size)
+            self.compression_rate,
+            self.d_model
+        )
 
         # Create Layers for the CompressiveTransformer layer
         self.self_attn = RelativeMultiheadAttention(
-            self.num_heads,
-            self.hidden_size,
-            self.head_size,
+            self.n_head,
+            self.d_model,
+            self.d_head,
             self.dropout_rate,
+            **kwargs
         )
-        self.feed_forward = PositionwiseFF(config)
-        self.norm_self_attn = nn.LayerNorm([self.hidden_size])
+
+        # Feed Forward Layer after Multi-Head attention
+        self.feed_forward = PositionwiseFF(
+            self.d_model,
+            self.d_inner,
+            self.dropout_rate,
+            self.pre_lnorm,
+            self.lnorm_epsilon
+        )
+
+        # Norm applied before self-attention
+        self.norm_self_attn = nn.LayerNorm([self.d_model])
 
     def _concat_memories(self, input_ids, mem=None, c_mem=None):
         """ Concatenate the tensors of input_ids, memory and compressed memory
@@ -295,7 +303,7 @@ class CompressiveLayer(nn.Module):
         return combined
 
     # TODO: Input dimensions
-    def forward(self, input_ids, positional_embedding, mem=None, c_mem=None, attention_mask=None, output_attention=False):
+    def forward(self, input_ids, positional_embedding, mem=None, c_mem=None, attention_mask=None, output_attentions=False):
         """Forward pass thorught this Compressive Transformer layer
 
         Args:
@@ -310,16 +318,14 @@ class CompressiveLayer(nn.Module):
         Returns:
             torch.tensor: The encoded sequence after a forward pass through this layer
         """
-        # Norm before attention
-        norm_attn = self.norm_self_attn(input_ids)
-        combined = self._concat_memories(norm_attn, mem, c_mem)
+        combined = self._concat_memories(input_ids, mem, c_mem)
 
         # Apply relative self attention
         attention_scores = self.self_attn(
             combined,
             positional_embedding,
             attn_mask=attention_mask,
-            output_attention=output_attention
+            output_attention=output_attentions
         )
 
         # Final feed forward block
@@ -382,7 +388,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         self.vocab_size = config.vocab_size
         self.embedding_size = config.d_embed
         self.hidden_size = config.d_head
-        self.num_heads = config.num_heads
+        self.num_heads = config.n_head
         self.cutoffs = config.cutoffs
         self.dropout_rate = config.dropout
         self.num_layers = config.n_layer
@@ -432,7 +438,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             # Initialize memory and read parameters for checking
             # Device and dtype
             memory = []
-            param = next(self.parameters)
+            param = next(self.parameters())
 
             # Fill Memory with zeros
             for _ in range(self.num_layers):
@@ -643,7 +649,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # Transpose for unified library interface. See comment in TransfoXLModel
         if input_ids is not None:
-            input_ids = input_ids.transpose(0, 1).contigous()
+            input_ids = input_ids.transpose(0, 1).contiguous()
             query_length, batch_size = input_ids.shape
         else:
             raise ValueError("input_ids has to be specified for forward pass")
@@ -727,7 +733,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             key_length,  # length
             -1,         # start
             -1,         # step
-            -1.0,       # TODO: what parameter is this? Check what happens if removed
+            #-1.0,       # TODO: what parameter is this? Check what happens if removed
             device=input_embeddings.device,
             dtype=input_embeddings.dtype
         )
@@ -820,8 +826,8 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         # Create an addaptive Softmax layer
         self.crit = ProjectedAdaptiveLogSoftmax(
             config.vocab_size,
-            config.embedding_size,
-            config.inner_size,
+            config.d_embed,
+            config.d_inner,
             config.cutoffs,
             config.div_val
         )
@@ -833,8 +839,8 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.return_dict
 
         if input_ids is not None:
-            batch_size = input_ids.size[0]
-            sequence_length = input_ids.size[1]
+            batch_size = input_ids.size(0)
+            sequence_length = input_ids.size(1)
 
         # Forward pass through base Compressive Transformer
         transformer_output = self.transformer(
