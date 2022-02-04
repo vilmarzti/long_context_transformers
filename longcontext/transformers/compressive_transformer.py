@@ -12,12 +12,14 @@ Code adapted from:
     labml-ai: https://github.com/labmlai/annotated_deep_learning_paper_implementations
     Transfomer-XL: https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/transfo_xl/modeling_transfo_xl.py
 """
+
+from dataclasses import dataclass
+from typing import List
+
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from dataclasses import dataclass
-from typing import List
 
 from transformers import (
     TransfoXLConfig,
@@ -30,14 +32,14 @@ from transformers.models.transfo_xl.modeling_transfo_xl import (
     AdaptiveEmbedding,
     PositionalEmbedding,
     TransfoXLModelOutput,
-    TransfoXLLMHeadModelOutput,   
+    TransfoXLLMHeadModelOutput,
 )
 
 from transformers.models.transfo_xl.modeling_transfo_xl_utilities import ProjectedAdaptiveLogSoftmax
 
 
 class CompressiveTransformerConfig(TransfoXLConfig):
-    """The configuration for the Compressive transformer. As most of the 
+    """The configuration for the Compressive transformer. As most of the
     Code for the C-transformer is taken from the Transfomer-XL implementation
     of Huggingface, the config is very similar.
 
@@ -49,6 +51,7 @@ class CompressiveTransformerConfig(TransfoXLConfig):
             are.
         compression_rate (int): How strongly the memories get compressed
     """
+
     def __init__(self, compression_rate=4, c_mem_length=None, **kwargs):
         """See Class doc-string for further information
 
@@ -57,7 +60,7 @@ class CompressiveTransformerConfig(TransfoXLConfig):
                 compressed. Defaults to 4.
             c_mem_length (int, optional): How many instances of compressed
                 memory there are. Defaults to None.
-            kwargs (dict): Additional settings for the TransfoXLConfig or 
+            kwargs (dict): Additional settings for the TransfoXLConfig or
                 pretrained config.
         """
         # Init TransfoXLConfig
@@ -91,11 +94,12 @@ class CompressiveTransformerModelOutput(TransfoXLModelOutput):
         https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L606
 
     Additional Args:
-        c_mem (List[torch.FloatTensor]): A list with the compressed memories for 
+        c_mem (List[torch.FloatTensor]): A list with the compressed memories for
             each layer in the C-Transformer
 
     """
     c_mems: List[torch.FloatTensor] = None
+
 
 @dataclass
 class CompressiveTransformerLMHeadModelOutput(TransfoXLLMHeadModelOutput):
@@ -119,11 +123,12 @@ class Conv1dCompression(nn.Module):
 
     Compare to:
         https://nn.labml.ai/transformers/compressive/index.html
-    
+
     Attributes:
         conv (nn.Conv1d): A 1d-convolution used for compression of old
             memories
     """
+
     def __init__(self, compression_rate, hidden_size):
         """Initialize the 1dConvolution that compresses the memory
 
@@ -154,25 +159,38 @@ class Conv1dCompression(nn.Module):
         memories = memories.permute(2, 0, 1)
         return memories
 
+
 class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
-    def content_based_attention(self, sequence):
+    def content_based_attention(self, sequence, mem):
+        # Read values for later processing
         query_length = sequence.size(0)
         batch_size = sequence.size(1)
 
+        # Concatenate memory and sequence
+        cat = torch.cat([mem, sequence], dim=0)
 
+        # Apply lnorm is specified
         if self.pre_lnorm:
-            w_heads = self.qkv_net(self.layer_norm(sequence))
+            w_heads = self.qkv_net(self.layer_norm(cat))
         else:
-            w_heads = self.qkv_net(sequence)
-        
+            w_heads = self.qkv_net(cat)
+
+        # Get Query, Key and Values
         w_head_q, w_head_k, w_head_v = torch.chunk(w_heads, 3, dim=-1)
+        w_head_q = w_head_q[-query_length:]
 
         key_length = w_head_k.size(0)
 
         # TODO: check shapes
-        w_head_q = w_head_q.view(query_length, batch_size, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
-        w_head_k = w_head_k.view(key_length, batch_size, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
-        w_head_v = w_head_v.view(key_length, batch_size, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
+        # qlen x bsz x n_head x d_head
+        w_head_q = w_head_q.view(
+            query_length, batch_size, self.n_head, self.d_head)
+        # qlen x bsz x n_head x d_head
+        w_head_k = w_head_k.view(
+            key_length, batch_size, self.n_head, self.d_head)
+        # qlen x bsz x n_head x d_head
+        w_head_v = w_head_v.view(
+            key_length, batch_size, self.n_head, self.d_head)
 
         attn_score = torch.einsum("ibnd,jbnd->ijbn", (w_head_q, w_head_k))
 
@@ -181,9 +199,11 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
         attn_vec = torch.einsum("ijbn,jbnd->ibnd", (attn_prob, w_head_v))
 
         # TODO: check shape
-        attn_vec = attn_vec.contiguous().view(attn_vec.size(0), attn_vec.size(1), self.n_head * self.d_head)
+        attn_vec = attn_vec.contiguous().view(attn_vec.size(
+            0), attn_vec.size(1), self.n_head * self.d_head)
 
         return attn_vec
+
 
 class CompressiveLayer(nn.Module):
     """A layer of the Compressive transfomer. It uses the RelPartialLearnableMultiheadAttn
@@ -204,6 +224,7 @@ class CompressiveLayer(nn.Module):
         compression (nn.Module): The compression function that compresses new memories. Currently only
             1d-convolution is supported
     """
+
     def __init__(self, config):
         """Initialize the compressive Layer which performs relative self attention with a corresponding
         feed-forward block.
@@ -222,7 +243,8 @@ class CompressiveLayer(nn.Module):
         self.compression_rate = config.compression_rate
 
         # Create Compression function
-        self.compression = Conv1dCompression(self.compression_rate, self.hidden_size)
+        self.compression = Conv1dCompression(
+            self.compression_rate, self.hidden_size)
 
         # Create Layers for the CompressiveTransformer layer
         self.self_attn = RelativeMultiheadAttention(
@@ -233,7 +255,7 @@ class CompressiveLayer(nn.Module):
         )
         self.feed_forward = PositionwiseFF(config)
         self.norm_self_attn = nn.LayerNorm([self.hidden_size])
-    
+
     def _concat_memories(self, input_ids, mem=None, c_mem=None):
         """ Concatenate the tensors of input_ids, memory and compressed memory
 
@@ -251,7 +273,7 @@ class CompressiveLayer(nn.Module):
         elif c_mem is not None:
             # TODO: Look at dimension
             mem = torch.cat((mem, c_mem), dim=0)
-        
+
         # TODO how to order norm
         norm = self.norm_self_attn(mem)
 
@@ -330,8 +352,9 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         layers (nn.ModuleList): List of the compressive layers in this transformer
         pos_embedding (nn.Module): A module that creates the tensors for the 
             positional embedding.
-        
+
     """
+
     def __init__(self, config):
         """ Initialize properties and layers from a config
 
@@ -379,7 +402,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         self.pos_embedding = PositionalEmbedding(self.hidden_size)
 
         self.post_init()
-    
+
     def init_memories(self, memory_size, batch_size):
         """Initialize memory tensors with appropriate size
 
@@ -414,7 +437,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             return memory
         else:
             return None
-        
+
     def calculate_reconstruction_loss(self, layer, hidden_state, memory):
         # Detach embeddings and memories
         hidden_state = hidden_state.detach()
@@ -434,9 +457,13 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             ) for embed in [hidden_state, memory, c_memory]
         )
 
-        # TODO: Implement use of content-base attention 
-        # Also see: https://nn.labml.ai/transformers/compressive/index.html
-        attention_layer: RelPartialLearnableMultiHeadAttn = layer.self_attn.detach()
+        # Apply self_attention without gradients
+        attn_memory = layer.self_attn.detach().content_based_attention(hidden_state, memory)
+        attn_c_memory = layer.self_attn.detach(
+        ).content_based_attention(hidden_state, c_memory)
+
+        layer_compression_loss = F.mse_loss(attn_memory, attn_c_memory)
+        return layer_compression_loss
 
     def attention_reconstruction_loss(self, hidden_states, memories):
         losses = []
@@ -448,7 +475,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             ))
 
         return torch.sum(losses)
-        
+
     @torch.no_grad()
     def merge_and_compress(self, memory, compressed_memory, new_memory):
         """ Merge the current memory and compressed memory with the new memory.
@@ -473,17 +500,19 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         """
         if memory is None and new_memory is None:
             return None, None
-        
+
         # Concatenate old memories with new memories
         if memory:
-            memory = [torch.cat((m, x), dim=0) for m, x in zip(memory, new_memory)]
+            memory = [torch.cat((m, x), dim=0)
+                      for m, x in zip(memory, new_memory)]
         else:
             memory = new_memory
-        
+
         # Compress the oldest memory
         if len(memory[0]) > self.mem_length:
             # Calculate the number of compressed memories to create
-            num_c_mem = (len(memory[0]) - self.mem_length + self.compression_rate - 1) // self.compression_rate
+            num_c_mem = (len(memory[0]) - self.mem_length +
+                         self.compression_rate - 1) // self.compression_rate
 
             # Number of memories to compress
             num_mem_to_compress = num_c_mem * self.compression_rate
@@ -496,11 +525,12 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
             # Split memory into needs to be compressed and doesn't need to be compressed
             for m in memory:
-                cm, m = torch.split(m, [num_mem_to_compress, len(m) - num_mem_to_compress])
+                cm, m = torch.split(
+                    m, [num_mem_to_compress, len(m) - num_mem_to_compress])
 
                 mem_to_compress.append(cm)
                 uncompressed_mem.append(m)
-            
+
             # Assign new memory
             new_memory = uncompressed_mem
 
@@ -508,22 +538,23 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             new_c_memory = []
             for i, layer in enumerate(self.layers):
                 new_c_memory = layer.compress(mem_to_compress[i])
-            
+
             # After compressing, concat with old compressed
             if compressed_memory:
-                compressed_memory = [torch.cat([m, nm], dim=0) for m, nm in zip(compressed_memory, new_c_memory)]
+                compressed_memory = [torch.cat([m, nm], dim=0) for m, nm in zip(
+                    compressed_memory, new_c_memory)]
             else:
-                compressed_memory = new_c_memory 
+                compressed_memory = new_c_memory
 
             # Truncate compressed memory to given length
             if len(compressed_memory[0]) > self.c_mem_length:
-                compressed_memory = [m[-self.c_mem_length:] for m in compressed_memory]#
+                compressed_memory = [m[-self.c_mem_length:]
+                                     for m in compressed_memory]
         else:
             mem_to_compress = []
 
         # Also return the mem_to_compress for Reconstruction loss
         return new_memory, compressed_memory, mem_to_compress
-
 
     def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=False):
         """ The forward pass in the base Compressive Transformer layer
@@ -576,11 +607,11 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             query_length, batch_size = input_ids.shape
         else:
             raise ValueError("input_ids has to be specified for forward pass")
-        
+
         # Initialize memories if not given
         if mems is None:
             mems = self.init_memories(self.mem_length, batch_size)
-        
+
         # Intialize compressed memories if not given
         if c_mems is None:
             c_mems = self.init_memories(self.c_mem_length, batch_size)
@@ -588,7 +619,8 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         # Get head_mask into appropriate size. Currently only one dimension is supported
         # That means that we disable the heads for all layers in the same way
         if head_mask is not None and head_mask.dim == 1:
-            head_mask = head_mask.unsqueeze(0).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+            head_mask = head_mask.unsqueeze(
+                0).unsqueeze(0).unsqueeze(0).unsqueeze(0)
             head_mask = head_mask.expand(self.n_layer, -1, -1, -1, -1)
         else:
             head_mask = [None] * self.num_layers
@@ -599,7 +631,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         # TODO: Check following if-clause of the code and how attention_masks work
         # Resources:
         #   https://medium.com/analytics-vidhya/masking-in-transformers-self-attention-mechanism-bad3c9ec235c
-        # 
+        #
 
         # Get appropriate memory lengths. This is necessary if the parameters mems/c_mems
         # Are not given (i.e. they are passed as None)
@@ -630,7 +662,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             # TODO: Check attention mask (sum of upper and lower triangular matrix?)
             # Get the attention mask
             attention_mask = (
-                torch.triu(all_ones, 1 + mask_length) + 
+                torch.triu(all_ones, 1 + mask_length) +
                 torch.tril(all_ones, -mask_shift_len)
             )[:, :, None]
 
@@ -647,12 +679,12 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 ),
                 diagonal=1 + mem_length + c_mem_length
             )[:, :, None]
-        
+
         # PREPARE FORWARD-PASS
 
         # Create a tensor with the given positions
         position_sequence = torch.arange(
-            key_length, # length
+            key_length,  # length
             -1,         # start
             -1,         # step
             -1.0,       # TODO: what parameter is this? Check what happens if removed
@@ -700,7 +732,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             # Add attention if it is needed in output
             if output_attentions:
                 attentions.append(layer_output[1])
-        
+
         # Apply dropout before outputting
         final_output = self.dropout(hidden_state)
 
@@ -708,23 +740,26 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         if output_hidden_states:
             hidden_states.append(hidden_state)
             # Set up for library standard shape [bsz, len, hidden_dim]
-            hidden_states = tuple(v.transpose(1, 0).contiguous() for v in hidden_states)
+            hidden_states = tuple(v.transpose(1, 0).contiguous()
+                                  for v in hidden_states)
 
         # Process attentions if part of output
         if output_attentions:
             # Transpose to library standard shape [bsz, n_heads, query_seq_len, key_seq_len]
-            attentions = tuple(t.permute(2, 3, 0, 1).contiguous() for t in attentions)
-        
+            attentions = tuple(t.permute(2, 3, 0, 1).contiguous()
+                               for t in attentions)
+
         # Process output to library standard shape
         final_output = final_output.transpose(1, 0).contiguous()
 
         # Create new memories from the computed hidden states
-        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(mems, c_mems, hidden_states)
+        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(
+            mems, c_mems, hidden_states)
 
         # One version of the output
         if not return_dict:
             return tuple(v for v in [final_output, new_mems, new_c_mems, mem_to_compress, hidden_states, attentions] if v is not None)
-        
+
         return CompressiveTransformerModelOutput(
             last_hidden_state=final_output,
             mems=new_mems,
@@ -759,8 +794,8 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         if input_ids is not None:
             batch_size = input_ids.size[0]
-            sequence_length =  input_ids.size[1]
-        
+            sequence_length = input_ids.size[1]
+
         # Forward pass through base Compressive Transformer
         transformer_output = self.transformer(
             input_ids,
@@ -778,8 +813,18 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         softmax_output = self.crit(prediction_hidden, labels)
 
-        prediction_scores = softmax_output.view(batch_size, sequence_length, -1) if labels is None else ()
-        loss = softmax_output.view(batch_size, sequence_length - 1) if labels is not None else None
+        prediction_scores = softmax_output.view(
+            batch_size, sequence_length, -1) if labels is None else ()
+
+        # Compute losses
+        prediction_loss = softmax_output.view(
+            batch_size, sequence_length - 1) if labels is not None else None
+        attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
+            hidden_states=transformer_output.hidden_states,
+            memories=transformer_output.mems
+        )
+
+        loss = prediction_loss + attention_reconstruction_loss
 
         if not return_dict:
             output = (prediction_scores,) + transformer_output[1:]
@@ -791,5 +836,5 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             mems=transformer_output.mems,
             hidden_states=transformer_output.hidden_states,
             attentions=transformer_output.attentions,
-            c_mems=transformer_output.c_mems 
+            c_mems=transformer_output.c_mems
         )
