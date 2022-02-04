@@ -151,12 +151,13 @@ class Conv1dCompression(nn.Module):
 
 
 class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
-    """Relative positional Attention based on the Transformer-XL 
+    """Relative positional Attention based on the Transformer-XL
     self attention with additional method for attention-reconstruction
     loss
     """
+
     def content_based_attention(self, sequence, mem):
-        """This performs the attention operation without any relative 
+        """This performs the attention operation without any relative
         positional mechanism
 
         Args:
@@ -164,7 +165,7 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
             mem (torch.FloatTensor): The memory from previous sequences
 
         Returns:
-            torch.FloatTensor: The values we get after applying the 
+            torch.FloatTensor: The values we get after applying the
                 attention mechanism.
         """
         # Read values for later processing
@@ -208,6 +209,7 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
             0), attn_vec.size(1), self.n_head * self.d_head)
 
         return attn_vec
+
 
 class CompressiveLayer(nn.Module):
     """A layer of the Compressive transfomer. It uses the RelPartialLearnableMultiheadAttn
@@ -356,19 +358,19 @@ class CompressiveTransformerPretrainedModel(TransfoXLPreTrainedModel):
 
 
 class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
-    """The base model for the Compressive Transformer. This will be used by 
+    """The base model for the Compressive Transformer. This will be used by
     other models further down the line
 
     Args:
-        config_args (any): Config settings that are saved by the model for 
-            later usage. See the CompressiveTransformerConfig and the 
+        config_args (any): Config settings that are saved by the model for
+            later usage. See the CompressiveTransformerConfig and the
             TransfoXLConfig for further details.
         word_emb (nn.Module): Embedding layer for the tokens that get fed into
             the transformer
         dropout (nn.Module): The dropout layer that is applied to the input-/
             positional embeddings.
         layers (nn.ModuleList): List of the compressive layers in this transformer
-        pos_embedding (nn.Module): A module that creates the tensors for the 
+        pos_embedding (nn.Module): A module that creates the tensors for the
             positional embedding.
 
     """
@@ -377,8 +379,8 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         """ Initialize properties and layers from a config
 
         Args:
-            config (CompressiveTransformerConfig):See the 
-                CompressiveTransformerConfig and the TransfoXLConfig for further 
+            config (CompressiveTransformerConfig):See the
+                CompressiveTransformerConfig and the TransfoXLConfig for further
                 details.
         """
         super().__init__(config)
@@ -467,7 +469,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 with the given layer.
 
         Returns:
-            torch.FloatTensor: 
+            torch.FloatTensor:
         """
         # Detach embeddings and memories
         hidden_state = hidden_state.detach()
@@ -496,7 +498,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         return layer_compression_loss
 
     def attention_reconstruction_loss(self, hidden_states, memories):
-        """Generates the Attention-Reconstruction loss for each layer as 
+        """Generates the Attention-Reconstruction loss for each layer as
         described in the paper.
 
         Compare to:
@@ -534,13 +536,13 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             memory (List[torch.Tensor]): Old memory from the previous step
             compressed_memory (List[torch.Tensor]): Old compressed memory from
                 the previous step.
-            new_memory ([type]): The new hidden states that should be added to 
+            new_memory ([type]): The new hidden states that should be added to
                 the memory.
 
         Returns:
-            (List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]): A 
+            (List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]): A
             3-tuple that consists of the new (uncompressed) memory, the new
-            compressed memory and the memories that have been compressed. 
+            compressed memory and the memories that have been compressed.
             The last part of this tuple is needed for the attention-reconstruction
             loss
         """
@@ -572,7 +574,9 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             # Split memory into needs to be compressed and doesn't need to be compressed
             for m in memory:
                 cm, m = torch.split(
-                    m, [num_mem_to_compress, len(m) - num_mem_to_compress])
+                    m,
+                    [num_mem_to_compress, len(m) - num_mem_to_compress]
+                )
 
                 mem_to_compress.append(cm)
                 uncompressed_mem.append(m)
@@ -587,7 +591,8 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
             # After compressing, concat with old compressed
             if compressed_memory:
-                compressed_memory = [torch.cat([m, nm], dim=0) for m, nm in zip(
+                compressed_memory = [
+                    torch.cat([m, nm], dim=0) for m, nm in zip(
                     compressed_memory, new_c_memory)]
             else:
                 compressed_memory = new_c_memory
@@ -733,7 +738,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             key_length,  # length
             -1,         # start
             -1,         # step
-            #-1.0,       # TODO: what parameter is this? Check what happens if removed
+            # -1.0,       # TODO: what parameter is this? Check what happens if removed
             device=input_embeddings.device,
             dtype=input_embeddings.dtype
         )
