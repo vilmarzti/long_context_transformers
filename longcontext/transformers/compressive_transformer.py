@@ -20,7 +20,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-
 from transformers import (
     TransfoXLConfig,
     TransfoXLPreTrainedModel
@@ -76,13 +75,12 @@ class CompressiveTransformerConfig(TransfoXLConfig):
         self.compression_rate = compression_rate
 
         # Rename some of the properties for readability
-        self.embedding_size = kwargs.get("d_embed")
-        self.hidden_size = kwargs.get("d_model")
-        self.head_size = kwargs.get("d_heads")
-        self.num_heads = kwargs.get("n_heads")
-        self.dropout_rate = kwargs.get("dropout")
-        self.num_layers = kwargs.get("n_layers")
-        self.clamp_length = kwargs.get("clamp_len")
+        self.embedding_size = self.d_embed
+        self.hidden_size = self.d_head
+        self.num_heads = self.n_head
+        self.dropout_rate = self.dropout
+        self.num_layers = self.n_layer
+        self.clamp_length = self.clamp_len
 
 
 @dataclass
@@ -161,7 +159,22 @@ class Conv1dCompression(nn.Module):
 
 
 class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
+    """Relative positional Attention based on the Transformer-XL 
+    self attention with additional method for attention-reconstruction
+    loss
+    """
     def content_based_attention(self, sequence, mem):
+        """This performs the attention operation without any relative 
+        positional mechanism
+
+        Args:
+            sequence (torch.FloatTensor): The sequence we embedded
+            mem (torch.FloatTensor): The memory from previous sequences
+
+        Returns:
+            torch.FloatTensor: The values we get after applying the 
+                attention mechanism.
+        """
         # Read values for later processing
         query_length = sequence.size(0)
         batch_size = sequence.size(1)
@@ -239,7 +252,6 @@ class CompressiveLayer(nn.Module):
         self.hidden_size = config.hidden_size
         self.dropout_rate = config.dropout_rate
         self.num_heads = config.num_heads
-        self.head_size = config.head_size
         self.compression_rate = config.compression_rate
 
         # Create Compression function
@@ -368,16 +380,15 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         # Get Properties form config for later use.
         # CompressiveTransformerConfig for details
         self.vocab_size = config.vocab_size
-        self.embedding_size = config.embedding_size
-        self.hidden_size = config.hidden_size
+        self.embedding_size = config.d_embed
+        self.hidden_size = config.d_head
         self.num_heads = config.num_heads
-        self.head_size = config.head_size
         self.cutoffs = config.cutoffs
-        self.dropout_rate = config.dropout_rate
-        self.num_layers = config.num_layers
-        self.mem_length = config.mem_length
+        self.dropout_rate = config.dropout
+        self.num_layers = config.n_layer
+        self.mem_length = config.mem_len
         self.c_mem_length = config.c_mem_length
-        self.same_length = config.self_length
+        self.same_length = config.same_length
         self.clamp_length = config.clamp_len
         self.compression_rate = config.compression_rate
 
@@ -439,6 +450,19 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             return None
 
     def calculate_reconstruction_loss(self, layer, hidden_state, memory):
+        """Calculates the reconstruction loss for a given layer
+
+        Args:
+            layer (CompressiveTransfomerLayer): The layer that includes the
+                compression function and the attention mechanism
+            hidden_state (torch.FloatTensor): The hidden states associated
+                with the given layer
+            memory (torch.FloatTensor): The memories to compress associated
+                with the given layer.
+
+        Returns:
+            torch.FloatTensor: 
+        """
         # Detach embeddings and memories
         hidden_state = hidden_state.detach()
         memory = memory.detach()
@@ -466,6 +490,22 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         return layer_compression_loss
 
     def attention_reconstruction_loss(self, hidden_states, memories):
+        """Generates the Attention-Reconstruction loss for each layer as 
+        described in the paper.
+
+        Compare to:
+            https://nn.labml.ai/transformers/compressive/index.html
+
+        Args:
+            hidden_states (List[torch.FloatTensor]): The computed hidden states
+                for each layer.
+            memories (List[torch.FloatTensor]): The memories that got compressed
+                in the current step
+
+        Returns:
+            torch.FloatTensor: The summed up attention-reconstruction losses from
+                each layer
+        """
         losses = []
         for i, layer in enumerate(self.layers):
             losses.append(self.calculate_reconstruction_loss(
@@ -771,7 +811,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
 class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
     def __init__(self, config):
-        super().__init__()
+        super().__init__(config)
 
         self.transformer = CompressiveTransfomerModel(config)
 
