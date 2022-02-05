@@ -276,31 +276,21 @@ class CompressiveLayer(nn.Module):
         # Norm applied before self-attention
         self.norm_self_attn = nn.LayerNorm([self.d_model])
 
-    def _concat_memories(self, input_ids, mem=None, c_mem=None):
+    def _concat_memories(self, mem, c_mem=None):
         """ Concatenate the tensors of input_ids, memory and compressed memory
 
         Args:
-            input_ids (torch.tensor): The encoded sequence
-            mem (torch.tensor, optional): The memories from previous runs. Defaults to None.
+            mem (torch.tensor, optional): The memories from previous runs.
             c_mem (torch.tensor, optional): The compressed memories of previous runs. Defaults to None.
 
         Returns:
-            torch.tensor: Concatenated version of input_ids, memory and compressed memory
+            torch.tensor: Concatenated version of memory and compressed memory
         """
         # Concatenate memory and compressed memory
-        if mem is None:
-            return input_ids
-        elif c_mem is not None:
-            # TODO: Look at dimension
+        if c_mem is not None:
             mem = torch.cat((mem, c_mem), dim=0)
 
-        # TODO how to order norm
-        norm = self.norm_self_attn(mem)
-
-        # Combine input_ids with memory and compressed memory
-        combined = torch.cat((input_ids, norm), dim=0)
-
-        return combined
+        return mem
 
     # TODO: Input dimensions
     def forward(self, input_ids, positional_embedding, mem=None, c_mem=None, attention_mask=None, output_attentions=False):
@@ -318,19 +308,25 @@ class CompressiveLayer(nn.Module):
         Returns:
             torch.tensor: The encoded sequence after a forward pass through this layer
         """
-        combined = self._concat_memories(input_ids, mem, c_mem)
+        combined = self._concat_memories(mem, c_mem)
 
         # Apply relative self attention
         attention_scores = self.self_attn(
-            combined,
+            input_ids,
             positional_embedding,
             attn_mask=attention_mask,
-            output_attention=output_attentions
+            output_attention=output_attentions,
+            mems=combined
         )
 
         # Final feed forward block
         feed_forward = self.feed_forward(attention_scores[0])
+
+        # TODO: Check `[1:]`
         outputs = [feed_forward] + attention_scores[1:]
+
+        # Layer Norm after skip connection
+        outputs = self.norm_self_attn(outputs)
 
         return outputs
 
