@@ -870,6 +870,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         # Compute losses
         prediction_loss = softmax_output.view(
             batch_size, sequence_length - 1) if labels is not None else None
+
         attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
             hidden_states=transformer_output.hidden_states,
             memories=transformer_output.mems

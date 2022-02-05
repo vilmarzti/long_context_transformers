@@ -1,5 +1,6 @@
 env/
 project_env/
+.vscode/
 data/
 
 __pycache__
