@@ -275,9 +275,6 @@ class CompressiveLayer(nn.Module):
             self.lnorm_epsilon
         )
 
-        # Norm applied before self-attention
-        self.norm_self_attn = nn.LayerNorm([self.d_model])
-
     def _concat_memories(self, mem, c_mem=None):
         """ Concatenate the tensors of input_ids, memory and compressed memory
 
@@ -317,7 +314,7 @@ class CompressiveLayer(nn.Module):
             input_ids,
             positional_embedding,
             attn_mask=attention_mask,
-            output_attention=output_attentions,
+            output_attentions=output_attentions,
             mems=combined
         )
 
@@ -326,9 +323,6 @@ class CompressiveLayer(nn.Module):
 
         # TODO: Check `[1:]`
         outputs = [feed_forward] + attention_scores[1:]
-
-        # Layer Norm after skip connection
-        outputs = self.norm_self_attn(outputs)
 
         return outputs
 
@@ -385,7 +379,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         # CompressiveTransformerConfig for details
         self.vocab_size = config.vocab_size
         self.embedding_size = config.d_embed
-        self.hidden_size = config.d_head
+        self.hidden_size = config.d_model
         self.num_heads = config.n_head
         self.cutoffs = config.cutoffs
         self.dropout_rate = config.dropout
@@ -731,7 +725,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # Create a tensor with the given positions
         position_sequence = torch.arange(
-            key_length,  # length
+            key_length - 1,  # length
             -1,         # start
             -1,         # step
             # -1.0,       # TODO: what parameter is this? Check what happens if removed
@@ -765,7 +759,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
             # Pass through layer
             layer_output = layer(
-                input_embeddings,
+                hidden_state,
                 position_embeddings,
                 mem=current_memory,
                 c_mem=current_c_memory,
