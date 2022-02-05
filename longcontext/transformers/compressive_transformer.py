@@ -577,13 +577,13 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             # Compress appropriate memories
             new_c_memory = []
             for i, layer in enumerate(self.layers):
-                new_c_memory = layer.compress(mem_to_compress[i])
+                new_c_memory.append(layer.compression(mem_to_compress[i]))
 
             # After compressing, concat with old compressed
             if compressed_memory:
                 compressed_memory = [
                     torch.cat([m, nm], dim=0) for m, nm in zip(
-                    compressed_memory, new_c_memory)]
+                        compressed_memory, new_c_memory)]
             else:
                 compressed_memory = new_c_memory
 
@@ -746,12 +746,10 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # FORWARD_PASS
         hidden_state = input_embeddings
-        hidden_states = [] if output_hidden_states else None
+        hidden_states = []
         attentions = [] if output_attentions else None
         for i, layer in enumerate(self.layers):
-            # Save hidden state
-            if output_hidden_states:
-                hidden_states.append(hidden_state)
+            hidden_states.append(hidden_state)
 
             # Get appropriate (compressed) memory for the given layer
             current_memory = None if mems is None else mems[i]
@@ -778,11 +776,15 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         final_output = self.dropout(hidden_state)
 
         # Process hidden states if part of output
-        if output_hidden_states:
-            hidden_states.append(hidden_state)
-            # Set up for library standard shape [bsz, len, hidden_dim]
-            hidden_states = tuple(v.transpose(1, 0).contiguous()
-                                  for v in hidden_states)
+        hidden_states.append(hidden_state)
+
+        # Create new memories from the computed hidden states
+        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(
+            mems, c_mems, hidden_states)
+
+        # Set up for library standard shape [bsz, len, hidden_dim]
+        hidden_states = tuple(v.transpose(1, 0).contiguous()
+                              for v in hidden_states)
 
         # Process attentions if part of output
         if output_attentions:
@@ -792,10 +794,6 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # Process output to library standard shape
         final_output = final_output.transpose(1, 0).contiguous()
-
-        # Create new memories from the computed hidden states
-        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(
-            mems, c_mems, hidden_states)
 
         # One version of the output
         if not return_dict:
