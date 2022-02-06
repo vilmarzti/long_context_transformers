@@ -89,6 +89,7 @@ class CompressiveTransformerModelOutput(TransfoXLModelOutput):
 
     """
     c_mems: List[torch.FloatTensor] = None
+    mem_to_compress: List[torch.FloatTensor] = None
 
 
 @dataclass
@@ -156,6 +157,7 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
     loss
     """
 
+    @torch.no_grad()
     def content_based_attention(self, sequence, mem):
         """This performs the attention operation without any relative
         positional mechanism
@@ -171,6 +173,10 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
         # Read values for later processing
         query_length = sequence.size(0)
         batch_size = sequence.size(1)
+
+        # Transpose back to Transformer-XL shape
+        # TODO: Check whether to transpose mem or hidden_state
+        mem = mem.transpose(1, 0).contiguous()
 
         # Concatenate memory and sequence
         cat = torch.cat([mem, sequence], dim=0)
@@ -274,6 +280,8 @@ class CompressiveLayer(nn.Module):
             self.pre_lnorm,
             self.lnorm_epsilon
         )
+
+        self.norm_self_attn = nn.LayerNorm([self.d_model])
 
     def _concat_memories(self, mem, c_mem=None):
         """ Concatenate the tensors of input_ids, memory and compressed memory
@@ -480,9 +488,8 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         )
 
         # Apply self_attention without gradients
-        attn_memory = layer.self_attn.detach().content_based_attention(hidden_state, memory)
-        attn_c_memory = layer.self_attn.detach(
-        ).content_based_attention(hidden_state, c_memory)
+        attn_memory = layer.self_attn.content_based_attention(hidden_state, memory)
+        attn_c_memory = layer.self_attn.content_based_attention(hidden_state, c_memory)
 
         layer_compression_loss = F.mse_loss(attn_memory, attn_c_memory)
         return layer_compression_loss
@@ -779,8 +786,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         hidden_states.append(hidden_state)
 
         # Create new memories from the computed hidden states
-        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(
-            mems, c_mems, hidden_states)
+        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(mems, c_mems, hidden_states)
 
         # Set up for library standard shape [bsz, len, hidden_dim]
         hidden_states = tuple(v.transpose(1, 0).contiguous()
@@ -803,6 +809,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             last_hidden_state=final_output,
             mems=new_mems,
             c_mems=new_c_mems,
+            mem_to_compress=mem_to_compress,
             hidden_states=hidden_states,
             attentions=attentions
         )
@@ -848,9 +855,16 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         )
 
         # Read values from tuple/dict
-        last_hidden_state = transformer_output[0]
-        mems = transformer_output[1]
-        hidden_states = transformer_output[3]
+        if return_dict:
+            last_hidden_state = transformer_output.last_hidden_state
+            mems = transformer_output.mems
+            mems_to_compress = transformer_output.mems_to_compress
+            hidden_states = transformer_output.hidden_states
+        else:
+            last_hidden_state = transformer_output[0]
+            mems = transformer_output[1]
+            mems_to_compress = transformer_output[3]
+            hidden_states = transformer_output[4]
 
         # Get Softmax of last hidden_state
         prediction_hidden = last_hidden_state[:, -sequence_length:]
@@ -865,7 +879,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
             hidden_states=hidden_states,
-            memories=mems
+            memories=mems_to_compress
         )
 
         loss = prediction_loss + attention_reconstruction_loss
