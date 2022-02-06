@@ -89,7 +89,7 @@ class CompressiveTransformerModelOutput(TransfoXLModelOutput):
 
     """
     c_mems: List[torch.FloatTensor] = None
-    mem_to_compress: List[torch.FloatTensor] = None
+    mems_to_compress: List[torch.FloatTensor] = None
 
 
 @dataclass
@@ -157,7 +157,6 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
     loss
     """
 
-    @torch.no_grad()
     def content_based_attention(self, sequence, mem):
         """This performs the attention operation without any relative
         positional mechanism
@@ -170,22 +169,27 @@ class RelativeMultiheadAttention(RelPartialLearnableMultiHeadAttn):
             torch.FloatTensor: The values we get after applying the
                 attention mechanism.
         """
+        # Transpose back to Transformer-XL shape
+        sequence = sequence.transpose(1, 0).contiguous()
+
         # Read values for later processing
         query_length = sequence.size(0)
         batch_size = sequence.size(1)
 
-        # Transpose back to Transformer-XL shape
-        # TODO: Check whether to transpose mem or hidden_state
-        mem = mem.transpose(1, 0).contiguous()
-
         # Concatenate memory and sequence
         cat = torch.cat([mem, sequence], dim=0)
 
-        # Apply lnorm is specified
+        # Disable gradient adjustments through qkv
+        self.qkv_net.requires_grad_(False)
+
+        # Apply lnorm if specified
         if self.pre_lnorm:
             w_heads = self.qkv_net(self.layer_norm(cat))
         else:
             w_heads = self.qkv_net(cat)
+
+        # Enable gradients for qkv again
+        self.qkv_net.requires_grad_(True)
 
         # Get Query, Key and Values
         w_head_q, w_head_k, w_head_v = torch.chunk(w_heads, 3, dim=-1)
@@ -519,7 +523,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 memories[i]
             ))
 
-        return torch.sum(losses)
+        return torch.sum(torch.stack(losses))
 
     @torch.no_grad()
     def merge_and_compress(self, memory, compressed_memory, new_memory):
@@ -560,10 +564,10 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                          self.compression_rate - 1) // self.compression_rate
 
             # Number of memories to compress
-            num_mem_to_compress = num_c_mem * self.compression_rate
+            num_mems_to_compress = num_c_mem * self.compression_rate
 
             # Memories that need to be compressed
-            mem_to_compress = []
+            mems_to_compress = []
 
             # Memories that don't need to be compressed
             uncompressed_mem = []
@@ -572,10 +576,10 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             for m in memory:
                 cm, m = torch.split(
                     m,
-                    [num_mem_to_compress, len(m) - num_mem_to_compress]
+                    [num_mems_to_compress, len(m) - num_mems_to_compress]
                 )
 
-                mem_to_compress.append(cm)
+                mems_to_compress.append(cm)
                 uncompressed_mem.append(m)
 
             # Assign new memory
@@ -584,7 +588,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             # Compress appropriate memories
             new_c_memory = []
             for i, layer in enumerate(self.layers):
-                new_c_memory.append(layer.compression(mem_to_compress[i]))
+                new_c_memory.append(layer.compression(mems_to_compress[i]))
 
             # After compressing, concat with old compressed
             if compressed_memory:
@@ -599,12 +603,12 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 compressed_memory = [m[-self.c_mem_length:]
                                      for m in compressed_memory]
         else:
-            mem_to_compress = []
+            mems_to_compress = []
 
-        # Also return the mem_to_compress for Reconstruction loss
-        return new_memory, compressed_memory, mem_to_compress
+        # Also return the mems_to_compress for Reconstruction loss
+        return new_memory, compressed_memory, mems_to_compress
 
-    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=False):
+    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=None):
         """ The forward pass in the base Compressive Transformer layer
 
         Compare to:
@@ -786,7 +790,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         hidden_states.append(hidden_state)
 
         # Create new memories from the computed hidden states
-        new_mems, new_c_mems, mem_to_compress = self.merge_and_compress(mems, c_mems, hidden_states)
+        new_mems, new_c_mems, mems_to_compress = self.merge_and_compress(mems, c_mems, hidden_states)
 
         # Set up for library standard shape [bsz, len, hidden_dim]
         hidden_states = tuple(v.transpose(1, 0).contiguous()
@@ -803,13 +807,13 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # One version of the output
         if not return_dict:
-            return tuple(v for v in [final_output, new_mems, new_c_mems, mem_to_compress, hidden_states, attentions] if v is not None)
+            return tuple(v for v in [final_output, new_mems, new_c_mems, mems_to_compress, hidden_states, attentions] if v is not None)
 
         return CompressiveTransformerModelOutput(
             last_hidden_state=final_output,
             mems=new_mems,
             c_mems=new_c_mems,
-            mem_to_compress=mem_to_compress,
+            mems_to_compress=mems_to_compress,
             hidden_states=hidden_states,
             attentions=attentions
         )
@@ -834,7 +838,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         self.post_init()
 
-    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=False, labels=None):
+    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=None, labels=None):
         # Decide whether to return a dict or a tuple
         return_dict = return_dict if return_dict is not None else self.config.return_dict
 
