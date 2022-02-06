@@ -820,7 +820,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         self.crit = ProjectedAdaptiveLogSoftmax(
             config.vocab_size,
             config.d_embed,
-            config.d_inner,
+            config.d_model,
             config.cutoffs,
             config.div_val
         )
@@ -847,9 +847,13 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             return_dict=return_dict
         )
 
+        # Read values from tuple/dict
         last_hidden_state = transformer_output[0]
-        prediction_hidden = last_hidden_state[:, -sequence_length:]
+        mems = transformer_output[1]
+        hidden_states = transformer_output[3]
 
+        # Get Softmax of last hidden_state
+        prediction_hidden = last_hidden_state[:, -sequence_length:]
         softmax_output = self.crit(prediction_hidden, labels)
 
         prediction_scores = softmax_output.view(
@@ -860,8 +864,8 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             batch_size, sequence_length - 1) if labels is not None else None
 
         attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
-            hidden_states=transformer_output.hidden_states,
-            memories=transformer_output.mems
+            hidden_states=hidden_states,
+            memories=mems
         )
 
         loss = prediction_loss + attention_reconstruction_loss
