@@ -18,7 +18,8 @@ def main():
     config = CompressiveTransformerConfig(4, 10, n_layer=6)
     model = CompressiveTransformerWithLMHead(config)
     
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    #device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = "cpu"
     model.to(device)
 
     # Get tokenizer
