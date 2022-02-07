@@ -886,7 +886,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             memories=mems_to_compress
         )
 
-        if labels:
+        if labels is not None:
             loss = prediction_loss + attention_reconstruction_loss
         else:
             loss = attention_reconstruction_loss
