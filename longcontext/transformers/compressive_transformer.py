@@ -659,6 +659,10 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             query_length, batch_size = input_ids.shape
         else:
             raise ValueError("input_ids has to be specified for forward pass")
+        
+        # Transpose for unified library interface. See comment in TransfoXLModel
+        if attention_mask is not None:
+            attention_mask = attention_mask.transpose(0, 1).contiguous()
 
         # Initialize memories if not given
         if mems is None:
@@ -691,46 +695,26 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         c_mem_length = c_mems[0].size(0) if c_mems is not None else 0
         key_length = mem_length + c_mem_length + query_length
 
-        # If we use the same attention length for all tokens
-        # Taken from the source code of the TransfoXLConfig
-        if self.same_length and attention_mask is None:
-            # Get tensor of shape [query_length, key_length] with the device set the same as the
-            # input embeddings
+        if self.same_length:
             all_ones = input_embeddings.new_ones(
                 (query_length, key_length),
                 dtype=torch.uint8
             )
 
-            # TODO: Is it really the mask length
-            # Get the length of the mask
-            mask_length = key_length - self.mem_length - self.c_mem_length
-
-            # TODO: Why shift?
-            if mask_length > 0:
-                mask_shift_len = query_length - mask_length
+            mask_len = key_length - self.mem_length
+            if mask_len > 0:
+                mask_shift_len = query_length - mask_len
             else:
                 mask_shift_len = query_length
-
-            # TODO: Check attention mask (sum of upper and lower triangular matrix?)
-            # Get the attention mask
             attention_mask = (
-                torch.triu(all_ones, 1 + mask_length) +
-                torch.tril(all_ones, -mask_shift_len)
-            )[:, :, None]
-
-        # If attention_mask is already provided, do nothing
-        elif attention_mask is not None:
-            pass
-
-        # If same_length for all tokens is not set
+                torch.triu(all_ones, 1 + mem_length) + 
+                torch.tril(all_ones, -mask_shift_len))[:, :, None]  # -1
         else:
             attention_mask = torch.triu(
-                input_embeddings.new_ones(
-                    (query_length, key_length),
-                    dtype=torch.uint8
-                ),
-                diagonal=1 + mem_length + c_mem_length
-            )[:, :, None]
+                input_embeddings.new_ones((query_length, key_length),
+                dtype=torch.uint8),
+                diagonal=1 + mem_length
+                )[:, :, None]
 
         # PREPARE FORWARD-PASS
 
