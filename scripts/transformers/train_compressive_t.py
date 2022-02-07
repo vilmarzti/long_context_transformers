@@ -22,7 +22,8 @@ def main():
     config = CompressiveTransformerConfig(4, 10, vocab_size=tokenizer.vocab_size, n_layer=3, return_dict=True, cutoffs=[1000, 5000, 15000])
     model = CompressiveTransformerWithLMHead(config)
     
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    #device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = "cpu"
     model.to(device)
 
     # Get Dataloaders processed by TransfoXLTokenizer
