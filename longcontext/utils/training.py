@@ -23,7 +23,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
         device (string, optional): Either "cpu" or "cuda" for training on cpu/gpu.
             Defaults to "cpu"
     """
-    for epoch in range(epochs):
+    for epoch in range(1, epochs + 1):
         model.train()
         for batch in train_loader:
             input_ids = batch["input_ids"].to(device)
