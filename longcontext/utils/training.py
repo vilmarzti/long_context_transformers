@@ -3,7 +3,7 @@
 """
 import torch
 
-from transformers import LongformerModel
+from transformers import TransfoXLLMHeadModel
 
 
 def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu"):
@@ -23,7 +23,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
         device (string, optional): Either "cpu" or "cuda" for training on cpu/gpu.
             Defaults to "cpu"
     """
-    for epoch in range(epochs):
+    for epoch in range(1, epochs + 1):
         model.train()
         for batch in train_loader:
             input_ids = batch["input_ids"].to(device)
@@ -37,7 +37,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
             # Let it run through the Model
             # The TransformerXL model doesn't have an attention_mask input
-            if model is LongformerModel:
+            if model is not TransfoXLLMHeadModel:
                 outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
             else:
                 outputs = model(input_ids=input_ids, labels=input_ids)
@@ -78,7 +78,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                     # Let it run through the Model
                     # The TransformerXL model doesn't have an attention_mask input
-                    if model is LongformerModel:
+                    if model is not TransfoXLLMHeadModel:
                         outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
                     else:
                         outputs = model(input_ids=input_ids, labels=input_ids)

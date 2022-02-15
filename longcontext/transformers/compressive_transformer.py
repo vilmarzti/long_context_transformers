@@ -659,6 +659,10 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             query_length, batch_size = input_ids.shape
         else:
             raise ValueError("input_ids has to be specified for forward pass")
+        
+        # Transpose for unified library interface. See comment in TransfoXLModel
+        if attention_mask is not None:
+            attention_mask = attention_mask.transpose(0, 1).contiguous()
 
         # Initialize memories if not given
         if mems is None or not torch.any(mems):
@@ -701,36 +705,20 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 dtype=torch.uint8
             )
 
-            # TODO: Is it really the mask length
-            # Get the length of the mask
-            mask_length = key_length - self.mem_length - self.c_mem_length
-
-            # TODO: Why shift?
-            if mask_length > 0:
-                mask_shift_len = query_length - mask_length
+            mask_len = key_length - self.mem_length
+            if mask_len > 0:
+                mask_shift_len = query_length - mask_len
             else:
                 mask_shift_len = query_length
-
-            # TODO: Check attention mask (sum of upper and lower triangular matrix?)
-            # Get the attention mask
             attention_mask = (
-                torch.triu(all_ones, 1 + mask_length) +
-                torch.tril(all_ones, -mask_shift_len)
-            )[:, :, None]
-
-        # If attention_mask is already provided, do nothing
-        elif attention_mask is not None:
-            pass
-
-        # If same_length for all tokens is not set
+                torch.triu(all_ones, 1 + mem_length) + 
+                torch.tril(all_ones, -mask_shift_len))[:, :, None]  # -1
         else:
             attention_mask = torch.triu(
-                input_embeddings.new_ones(
-                    (query_length, key_length),
-                    dtype=torch.uint8
-                ),
-                diagonal=1 + mem_length + c_mem_length
-            )[:, :, None]
+                input_embeddings.new_ones((query_length, key_length),
+                dtype=torch.uint8),
+                diagonal=1 + mem_length
+                )[:, :, None]
 
         # PREPARE FORWARD-PASS
 
@@ -886,7 +874,10 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             memories=mems_to_compress
         )
 
-        loss = prediction_loss + attention_reconstruction_loss
+        if labels is not None:
+            loss = prediction_loss + attention_reconstruction_loss
+        else:
+            loss = attention_reconstruction_loss
 
         if not return_dict:
             output = (prediction_scores,) + transformer_output[1:]

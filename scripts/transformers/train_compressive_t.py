@@ -15,15 +15,15 @@ from transformers import (
 
 
 def main():
-    config = CompressiveTransformerConfig(4, 10, n_layer=6)
-    model = CompressiveTransformerWithLMHead(config)
-    
-    #device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    device = "cpu"
-    model.to(device)
-
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
+
+    # Create Model
+    config = CompressiveTransformerConfig(4, 10, vocab_size=tokenizer.vocab_size, n_layer=3, return_dict=True, cutoffs=[1000, 5000, 15000])
+    model = CompressiveTransformerWithLMHead(config)
+    
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model.to(device)
 
     # Get Dataloaders processed by TransfoXLTokenizer
     train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 24)
