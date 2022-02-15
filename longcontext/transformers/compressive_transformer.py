@@ -654,23 +654,23 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.return_dict
 
         # Transpose for unified library interface. See comment in TransfoXLModel
-        if input_ids is not None:
+        if input_ids is not None and torch.any(input_ids):
             input_ids = input_ids.transpose(0, 1).contiguous()
             query_length, batch_size = input_ids.shape
         else:
             raise ValueError("input_ids has to be specified for forward pass")
 
         # Initialize memories if not given
-        if mems is None:
+        if mems is None or not torch.any(mems):
             mems = self.init_memories(self.mem_length, batch_size)
 
         # Intialize compressed memories if not given
-        if c_mems is None:
+        if c_mems is None or not torch.any(c_mems):
             c_mems = self.init_memories(self.c_mem_length, batch_size)
 
         # Get head_mask into appropriate size. Currently only one dimension is supported
         # That means that we disable the heads for all layers in the same way
-        if head_mask is not None and head_mask.dim == 1:
+        if head_mask is None or not torch.any(head_mask):
             head_mask = head_mask.unsqueeze(
                 0).unsqueeze(0).unsqueeze(0).unsqueeze(0)
             head_mask = head_mask.expand(self.n_layer, -1, -1, -1, -1)
@@ -693,7 +693,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # If we use the same attention length for all tokens
         # Taken from the source code of the TransfoXLConfig
-        if self.same_length and attention_mask is None:
+        if self.same_length and (attention_mask is None or not torch.any(attention_mask)):
             # Get tensor of shape [query_length, key_length] with the device set the same as the
             # input embeddings
             all_ones = input_embeddings.new_ones(
@@ -838,11 +838,11 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         self.post_init()
 
-    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=None, labels=None):
+    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, labels=None, output_attentions=False, output_hidden_states=False, return_dict=None):
         # Decide whether to return a dict or a tuple
         return_dict = return_dict if return_dict is not None else self.config.return_dict
 
-        if input_ids is not None:
+        if input_ids is not None and torch.any(input_ids):
             batch_size = input_ids.size(0)
             sequence_length = input_ids.size(1)
 
