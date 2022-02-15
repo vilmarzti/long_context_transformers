@@ -395,7 +395,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         self.num_heads = config.n_head
         self.cutoffs = config.cutoffs
         self.dropout_rate = config.dropout
-        self.num_layers = config.n_layer
+        self.num_layer = config.n_layer
         self.mem_length = config.mem_len
         self.c_mem_length = config.c_mem_length
         self.same_length = config.same_length
@@ -416,7 +416,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # Add layers to the model
         self.layers = nn.ModuleList()
-        for _ in range(self.num_layers):
+        for _ in range(self.num_layer):
             self.layers.append(CompressiveLayer(config))
 
         # Add positional embedding (as described in original Transformer-XL paper)
@@ -445,7 +445,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             param = next(self.parameters())
 
             # Fill Memory with zeros
-            for _ in range(self.num_layers):
+            for _ in range(self.num_layer):
                 memory.append(
                     torch.zeros(
                         memory_size,
@@ -558,10 +558,10 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             memory = new_memory
 
         # Compress the oldest memory
-        if len(memory[0]) > self.mem_length:
+        if memory[0].shape[0] > self.mem_length:
             # Calculate the number of compressed memories to create
-            num_c_mem = (len(memory[0]) - self.mem_length +
-                         self.compression_rate - 1) // self.compression_rate
+            num_c_mem = (memory[0].shape[0] - self.mem_length +
+                        self.compression_rate - 1) // self.compression_rate
 
             # Number of memories to compress
             num_mems_to_compress = num_c_mem * self.compression_rate
@@ -576,7 +576,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             for m in memory:
                 cm, m = torch.split(
                     m,
-                    [num_mems_to_compress, len(m) - num_mems_to_compress]
+                    [num_mems_to_compress, m.shape[0] - num_mems_to_compress]
                 )
 
                 mems_to_compress.append(cm)
@@ -599,7 +599,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 compressed_memory = new_c_memory
 
             # Truncate compressed memory to given length
-            if len(compressed_memory[0]) > self.c_mem_length:
+            if compressed_memory[0].shape[0] > self.c_mem_length:
                 compressed_memory = [m[-self.c_mem_length:]
                                      for m in compressed_memory]
         else:
@@ -674,12 +674,12 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # Get head_mask into appropriate size. Currently only one dimension is supported
         # That means that we disable the heads for all layers in the same way
-        if head_mask is None or not torch.any(head_mask):
+        if head_mask is not None:
             head_mask = head_mask.unsqueeze(
                 0).unsqueeze(0).unsqueeze(0).unsqueeze(0)
-            head_mask = head_mask.expand(self.n_layer, -1, -1, -1, -1)
+            head_mask = head_mask.expand(self.num_layer, -1, -1, -1, -1)
         else:
-            head_mask = [None] * self.num_layers
+            head_mask = [None] * self.num_layer
 
         # Put input_ids into embeddings
         input_embeddings = self.word_emb(input_ids)
@@ -878,7 +878,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             loss = prediction_loss + attention_reconstruction_loss
         else:
             loss = attention_reconstruction_loss
-
+        
         if not return_dict:
             output = (prediction_scores,) + transformer_output[1:]
             return ((loss,) + output) if loss is not None else output
