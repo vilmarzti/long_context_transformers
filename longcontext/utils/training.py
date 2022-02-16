@@ -66,7 +66,8 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
         if valid_loader:
             with torch.no_grad():
                 # Go through 
-                average_loss=0
+                average_loss = 0
+                average_nll = 0
                 for batch in valid_loader:
                     # Get the appropriate columns
                     input_ids = batch["input_ids"].to(device)
@@ -90,10 +91,33 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                         loss = torch.mean(outputs.losses)
                     else:
                         raise AttributeError("outputs neither contain attribute `loss` or `losses`")
-
+                    
                     average_loss += loss.item()
+
+                    # compute perplexity
+                    # https://huggingface.co/docs/transformers/perplexity
+                    max_length = 
+                    stride = 256
+
+                    neg_log_likelihoods =[]
+                    for i in range(input_ids.size(1), stride):
+                        begin_loc = max(i + stride - max_length, 0)
+                        end_loc = max(i + stride, input_ids.size(1))
+                        target_len = end_loc - i
+
+                        input_ids = input_ids[:, begin_loc: end_loc]
+                        target_ids = input_ids.clone()
+                        target_ids[:, :-target_len] = -100
+
+                        ouputs = model(input_ids, attention_mask=attention_mask, labels=target_ids)
+                        nll = outputs[0] * target_len
+                        neg_log_likelihoods.apend(nll)
+
+                    perplexity = torch.exp(torch.stack(neg_log_likelihoods).sum() /end_loc)
+                    average_nll += perplexity.item()
+
                 
-                print(f"{epoch} in {epochs} done")
-                print(average_loss/len(valid_loader))
+                print(f"{epoch} in {epochs} done ")
+                print(f"avg_loss: {average_loss/len(valid_loader)} avg_ppl: {average_nll/len(valid_loader)}")
 
     return model
