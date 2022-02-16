@@ -96,11 +96,11 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                     # compute perplexity
                     # https://huggingface.co/docs/transformers/perplexity
-                    max_length = 
-                    stride = 256
+                    max_length = 128
+                    stride = 64
 
                     neg_log_likelihoods =[]
-                    for i in range(input_ids.size(1), stride):
+                    for i in range(0, input_ids.size(1), stride):
                         begin_loc = max(i + stride - max_length, 0)
                         end_loc = max(i + stride, input_ids.size(1))
                         target_len = end_loc - i
@@ -111,7 +111,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                         ouputs = model(input_ids, attention_mask=attention_mask, labels=target_ids)
                         nll = outputs[0] * target_len
-                        neg_log_likelihoods.apend(nll)
+                        neg_log_likelihoods.append(nll)
 
                     perplexity = torch.exp(torch.stack(neg_log_likelihoods).sum() /end_loc)
                     average_nll += perplexity.item()
