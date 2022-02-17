@@ -19,7 +19,7 @@ def main():
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
 
     # Create Model
-    config = CompressiveTransformerConfig(4, 10, vocab_size=tokenizer.vocab_size, n_layer=1, return_dict=True, cutoffs=[1000, 5000, 15000])
+    config = CompressiveTransformerConfig(4, 10, vocab_size=tokenizer.vocab_size, n_layer=2, return_dict=True, output_hidden_states=True, cutoffs=[1000, 5000, 15000])
     model = CompressiveTransformerWithLMHead(config)
     
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")

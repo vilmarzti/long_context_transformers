@@ -2,9 +2,44 @@
     This module contains the training routine for our transformer models.
 """
 import torch
+import torch.nn.functional as F
 
 from transformers import TransfoXLLMHeadModel
 
+
+def perplexity(model, input_ids, attention_mask):
+
+    sentence_token = torch.unbind(input_ids)
+    sentence_mask = torch.unbind(attention_mask)
+
+    
+    # Compute Perplexity for a sentence
+    perplexities = []
+    for tokens, attn in zip(sentence_token, sentence_mask):
+        sub_sequence_probs = []
+
+        # Generate probabilities for subsequence of sentence
+        for i in range(1, tokens.size(0)):
+            # don't generate padding
+            if attn[i] == 0.0:
+                break
+
+            token_head = tokens[:i].unsqueeze(dim=0)
+            mask_head = attn[:i].unsqueeze(dim=0)
+            outputs = model(token_head, attention_mask=mask_head, labels=token_head)
+            logits = outputs["logits"][:,-1]
+            probs = probs = torch.max(F.softmax(logits, dim=-1), dim=-1).values
+
+            sub_sequence_probs.append(probs)
+
+        # Compute perplexity if the whole sentence is just padding skip this
+        if len(sub_sequence_probs) > 0:
+            sub_sequence_probs = torch.stack(sub_sequence_probs)
+            # perplexity = torch.pow(torch.prod(1.0 / sub_sequence_probs.double()), 1/sub_sequence_probs.size(0))
+            perplexity = torch.exp((-1.0 / sub_sequence_probs.size(0)) * torch.log(sub_sequence_probs).sum())
+            perplexities.append(perplexity.item())
+
+    return perplexities
 
 def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu"):
     """ The training loop with validation.
@@ -67,7 +102,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             with torch.no_grad():
                 # Go through 
                 average_loss = 0
-                average_nll = 0
+                perplexities = []
                 for batch in valid_loader:
                     # Get the appropriate columns
                     input_ids = batch["input_ids"].to(device)
@@ -94,31 +129,13 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     
                     average_loss += loss.item()
 
+
                     # compute perplexity
-                    # https://huggingface.co/docs/transformers/perplexity
-                    max_length = 32
-                    stride = 16
+                    perplexities.extend(perplexity(model, input_ids, attention_mask))
 
-                    neg_log_likelihoods =[]
-                    for i in range(0, input_ids.size(1), stride):
-                        begin_loc = max(i + stride - max_length, 0)
-                        end_loc = min(i + stride, input_ids.size(1))
-                        target_len = end_loc - i
-
-                        nll_input_ids = input_ids[:, begin_loc: end_loc]
-                        nll_attention_mask = attention_mask[:, begin_loc: end_loc]
-                        nll_target_ids = nll_input_ids.clone()
-                        nll_target_ids[:, :-target_len] = -100
-
-                        outputs = model(nll_input_ids, attention_mask=nll_attention_mask, labels=nll_target_ids)
-                        nll = outputs[0] * target_len
-                        neg_log_likelihoods.append(nll)
-
-                    perplexity = torch.exp(torch.stack(neg_log_likelihoods).sum() /end_loc)
-                    average_nll += perplexity.item()
-
+                average_ppl = sum(perplexities) / len(perplexities)
                 
                 print(f"{epoch} in {epochs} done ")
-                print(f"avg_loss: {average_loss/len(valid_loader)} avg_ppl: {average_nll/len(valid_loader)}")
+                print(f"avg_loss: {average_loss/len(valid_loader)} avg_ppl: {average_ppl/len(valid_loader)}")
 
     return model

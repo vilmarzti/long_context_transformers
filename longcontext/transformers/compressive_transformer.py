@@ -105,6 +105,9 @@ class CompressiveTransformerLMHeadModelOutput(TransfoXLLMHeadModelOutput):
         c_mem (List[torch.FloatTensor]): A list with the compressed memories for
         each layer in the Compressive Transformer
     """
+    logits: torch.FloatTensor = None
+    prediction_loss: torch.FloatTensor = None
+    attention_reconstruction_loss: torch.FloatTensor = None
     c_mems: List[torch.FloatTensor] = None
 
 
@@ -654,7 +657,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.return_dict
 
         # Transpose for unified library interface. See comment in TransfoXLModel
-        if input_ids is not None and torch.any(input_ids):
+        if input_ids is not None and input_ids.dtype == torch.int64:
             input_ids = input_ids.transpose(0, 1).contiguous()
             query_length, batch_size = input_ids.shape
         else:
@@ -830,7 +833,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         # Decide whether to return a dict or a tuple
         return_dict = return_dict if return_dict is not None else self.config.return_dict
 
-        if input_ids is not None and torch.any(input_ids):
+        if input_ids is not None and input_ids.dtype == torch.int64:
             batch_size = input_ids.size(0)
             sequence_length = input_ids.size(1)
 
@@ -859,14 +862,11 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             hidden_states = transformer_output[4]
 
         # Get Softmax of last hidden_state
-        prediction_hidden = last_hidden_state[:, -sequence_length:]
-        softmax_output = self.crit(prediction_hidden, labels)
-
-        prediction_scores = softmax_output.view(
-            batch_size, sequence_length, -1) if labels is None else ()
+        logits = last_hidden_state[:, -sequence_length:]
 
         # Compute losses
-        prediction_loss = softmax_output.view(
+        ce_losses = self.crit(logits, labels)
+        ce_losses = ce_losses.view(
             batch_size, sequence_length - 1) if labels is not None else None
 
         attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
@@ -874,18 +874,19 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             memories=mems_to_compress
         )
 
+        # Accumulate prediction and reconstruction loss
         if labels is not None:
-            loss = prediction_loss + attention_reconstruction_loss
-        else:
-            loss = attention_reconstruction_loss
+            loss = ce_losses.sum() + attention_reconstruction_loss
         
         if not return_dict:
-            output = (prediction_scores,) + transformer_output[1:]
+            output = (logits,) + transformer_output[1:]
             return ((loss,) + output) if loss is not None else output
 
         return CompressiveTransformerLMHeadModelOutput(
             losses=loss,
-            prediction_scores=prediction_scores,
+            prediction_loss=ce_losses,
+            attention_reconstruction_loss=attention_reconstruction_loss,
+            logits=logits,
             mems=transformer_output.mems,
             hidden_states=transformer_output.hidden_states,
             attentions=transformer_output.attentions,
