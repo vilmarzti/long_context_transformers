@@ -876,7 +876,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         # Accumulate prediction and reconstruction loss
         if labels is not None:
-            loss = ce_losses.sum() + attention_reconstruction_loss
+            loss = ce_losses.mean() + attention_reconstruction_loss
         
         if not return_dict:
             output = (logits,) + transformer_output[1:]
