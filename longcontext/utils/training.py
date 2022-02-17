@@ -96,20 +96,21 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                     # compute perplexity
                     # https://huggingface.co/docs/transformers/perplexity
-                    max_length = 128
-                    stride = 64
+                    max_length = 32
+                    stride = 16
 
                     neg_log_likelihoods =[]
                     for i in range(0, input_ids.size(1), stride):
                         begin_loc = max(i + stride - max_length, 0)
-                        end_loc = max(i + stride, input_ids.size(1))
+                        end_loc = min(i + stride, input_ids.size(1))
                         target_len = end_loc - i
 
-                        input_ids = input_ids[:, begin_loc: end_loc]
-                        target_ids = input_ids.clone()
-                        target_ids[:, :-target_len] = -100
+                        nll_input_ids = input_ids[:, begin_loc: end_loc]
+                        nll_attention_mask = attention_mask[:, begin_loc: end_loc]
+                        nll_target_ids = nll_input_ids.clone()
+                        nll_target_ids[:, :-target_len] = -100
 
-                        ouputs = model(input_ids, attention_mask=attention_mask, labels=target_ids)
+                        outputs = model(nll_input_ids, attention_mask=nll_attention_mask, labels=nll_target_ids)
                         nll = outputs[0] * target_len
                         neg_log_likelihoods.append(nll)
 
