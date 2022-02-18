@@ -7,12 +7,16 @@
         https://github.com/neqkir/attention-mechanism
         `Left-ward flow`in Attention is all you need
 """
-from transformers.models.longformer.modeling_longformer import LongformerBaseModelOutput
-from transformers import LongformerPreTrainedModel
+import torch
 from torch import nn
 
+from dataclasses import dataclass
+from transformers.models.longformer.modeling_longformer import LongformerBaseModelOutput
+from transformers import LongformerPreTrainedModel
+
+@dataclass()
 class LongFormerLMHeadModelOutput(LongformerBaseModelOutput):
-    pass
+    loss: torch.FloatTensor = None
 
 class LongFormerLMHeadModel(LongformerPreTrainedModel):
     """
@@ -44,5 +48,8 @@ class LongFormerLMHeadModel(LongformerPreTrainedModel):
         # Post cleanup
         self.post_init()
     
-    def forward(input_ids=None, attention_mask=None, labels=None):
-        pass
+    def forward(self, input_ids=None, attention_mask=None, labels=None):
+        return LongFormerLMHeadModelOutput(
+            last_hidden_state=None,
+            loss=torch.tensor([0], requires_grad=True, dtype=torch.float)
+        )

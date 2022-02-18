@@ -35,7 +35,7 @@ def main():
     # Add padding token
     tokenizer.pad_token = tokenizer.token_to_id("<pad>")
 
-    tokenizer.save("data/tokenizer-wiki2.json")
+    tokenizer.save("data/tokenizer-long-wiki2.json")
 
 
 if __name__ == "__main__":

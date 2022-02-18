@@ -1,6 +1,7 @@
 import torch
 
 from transformers import LongformerForMaskedLM, LongformerConfig, PreTrainedTokenizerFast, AdamW, get_scheduler
+from longcontext.transformers.longformer import LongFormerLMHeadModel
 
 from longcontext.utils import train
 from longcontext.utils.dataset import get_dataloader
@@ -18,14 +19,14 @@ def main():
         max_position_embeddings=219,
         num_hidden_layers=6
     )
-    model = LongformerForMaskedLM(config)
+    model = LongFormerLMHeadModel(config)
 
     # Put model on GPU
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
 
     # Load pre-trained Tokenizer
-    tokenizer = PreTrainedTokenizerFast(tokenizer_file="data/tokenizer-wiki2.json")
+    tokenizer = PreTrainedTokenizerFast(tokenizer_file="data/tokenizer-long-wiki2.json")
 
     # Hack I need to fix
     tokenizer.pad_token = 3

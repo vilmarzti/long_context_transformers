@@ -20,7 +20,7 @@ def get_attribute(output, key):
             out = output[longformer[key]]
     
     else:
-        raise ValueError("output type not found.")
+        raise ValueError(f"Output of type {type(output)} not found.")
     
     if out is None:
         out = output[key]
