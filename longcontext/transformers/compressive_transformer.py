@@ -700,6 +700,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
         # If we use the same attention length for all tokens
         # Taken from the source code of the TransfoXLConfig
+        """
         if self.same_length and (attention_mask is None or not torch.any(attention_mask)):
             # Get tensor of shape [query_length, key_length] with the device set the same as the
             # input embeddings
@@ -717,12 +718,24 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 torch.triu(all_ones, 1 + mem_length) + 
                 torch.tril(all_ones, -mask_shift_len))[:, :, None]  # -1
         else:
-            attention_mask = torch.triu(
+            auto_reg_attention_mask = torch.triu(
                 input_embeddings.new_ones((query_length, key_length),
                 dtype=torch.uint8),
                 diagonal=1 + mem_length
                 )[:, :, None]
+        """
 
+        auto_reg_attention_mask = torch.triu(
+            input_embeddings.new_ones((query_length, key_length),
+            dtype=torch.uint8),
+            diagonal=1 + mem_length + c_mem_length
+        )[:,:,None]
+
+        auto_reg_attention_mask = auto_reg_attention_mask.repeat((1, 1, batch_size))
+        attention_mask = attention_mask.unsqueeze(1).repeat((1, key_length, 1))
+        
+        att_mask = torch.logical_and(auto_reg_attention_mask, attention_mask)
+        
         # PREPARE FORWARD-PASS
 
         # Create a tensor with the given positions
@@ -763,7 +776,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 position_embeddings,
                 mem=current_memory,
                 c_mem=current_c_memory,
-                attention_mask=attention_mask,
+                attention_mask=att_mask,
                 output_attentions=output_attentions
             )
 
