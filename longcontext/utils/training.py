@@ -4,6 +4,8 @@
 import torch
 import torch.nn.functional as F
 
+from tqdm import tqdm
+
 from transformers import TransfoXLLMHeadModel
 
 
@@ -60,7 +62,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
     """
     for epoch in range(1, epochs + 1):
         model.train()
-        for batch in train_loader:
+        for batch in tqdm(train_loader, desc=f"Training Epoch {epoch}"):
             input_ids = batch["input_ids"].to(device)
             # Get the appropriate columns
             input_ids = batch["input_ids"].to(device)
@@ -101,9 +103,9 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
         if valid_loader:
             with torch.no_grad():
                 # Go through 
-                average_loss = 0
+                losses = []
                 perplexities = []
-                for batch in valid_loader:
+                for batch in tqdm(valid_loader, desc=f"Validation epoch {epoch}"):
                     # Get the appropriate columns
                     input_ids = batch["input_ids"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
@@ -127,13 +129,14 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     else:
                         raise AttributeError("outputs neither contain attribute `loss` or `losses`")
                     
-                    average_loss += loss.item()
+                    losses.append(loss.item())
 
 
                     # compute perplexity
                     perplexities.extend(perplexity(model, input_ids, attention_mask))
 
                 average_ppl = sum(perplexities) / len(perplexities)
+                average_loss = sum(losses) / len(losses)
                 
                 print(f"{epoch} in {epochs} done ")
                 print(f"avg_loss: {average_loss/len(valid_loader)} avg_ppl: {average_ppl/len(valid_loader)}")

@@ -37,9 +37,10 @@ def get_dataloader(tokenizer, batch_size=8, samples=1000):
     
     # Get Datasets
     if samples: 
+        valid_samples = samples // 4
         train_dataset = tokenized_dataset["train"].shuffle(seed=42).select(range(samples))
-        valid_dataset = tokenized_dataset["validation"].shuffle(seed=42).select(range(samples))
-        test_dataset = tokenized_dataset["test"].shuffle(seed=42).select(range(samples))
+        valid_dataset = tokenized_dataset["validation"].shuffle(seed=42).select(range(valid_samples))
+        test_dataset = tokenized_dataset["test"].shuffle(seed=42).select(range(valid_samples))
     else:
         train_dataset = tokenized_dataset["train"].shuffle(seed=42)
         valid_dataset = tokenized_dataset["validation"].shuffle(seed=42)
