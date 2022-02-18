@@ -366,7 +366,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
     """The base model for the Compressive Transformer. This will be used by
     other models further down the line
 
-    Args:
+    Attrs:
         config_args (any): Config settings that are saved by the model for
             later usage. See the CompressiveTransformerConfig and the
             TransfoXLConfig for further details.
@@ -690,7 +690,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         # TODO: Check following if-clause of the code and how attention_masks work
         # Resources:
         #   https://medium.com/analytics-vidhya/masking-in-transformers-self-attention-mechanism-bad3c9ec235c
-        #
+        #   https://atcold.github.io/pytorch-Deep-Learning/en/week12/12-1/
 
         # Get appropriate memory lengths. This is necessary if the parameters mems/c_mems
         # Are not given (i.e. they are passed as None)
@@ -811,12 +811,17 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
 
 
 class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
+    """ The decoder with a linear-layer and projected adaptive logsoftmax on top
+    Note that the linear projection is included in this version of the softmax.
+
+    Atrr:
+        transfomer (CompressiveTransformerModel): The base C-Transfomer model.
+        crit (ProjectedAdaptiveLogSoftmax) : The softmax function for after the.
+    """
     def __init__(self, config):
         super().__init__(config)
 
         self.transformer = CompressiveTransfomerModel(config)
-
-        self.sample_softmax = config.sample_softmax
 
         # Create an addaptive Softmax layer
         self.crit = ProjectedAdaptiveLogSoftmax(
@@ -830,6 +835,26 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         self.post_init()
 
     def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, labels=None, output_attentions=False, output_hidden_states=False, return_dict=None):
+        """Makes one forwards pass for a given input sequence
+
+        Args:
+            input_ids (torch.LongTensor): The input token ids. Has size (B, S). Where
+                B is the batch size and S is the sequence-length.
+            mems (List[torch.FloatTensor], optional): A list with the previous hidden states for each layer.
+                Defaults to None.
+            c_mems (_type_, optional): A list with the compressed memories for each layer.
+                Defaults to None.
+            head_mask (torch.FloatTensor, optional): See Transformer-XL for documentation. Defaults to 
+                None
+            attention_mask (torch.FloatTensor, optional): A mask to signify what is padded. Defaults to None.
+            labels (torch.LongTensor, optional): The token ids of the desired output. Defaults to None.
+            output_attentions (bool, optional): Whether to output the attentions. Defaults to False.
+            output_hidden_states (bool, optional): Whether we should output the hidden-states. Defaults to False.
+            return_dict (bool, optional): If we should return a dict. Defaults to None.
+
+        Returns:
+            (tuple or CompressiveTransformerLMHeadModelOutpu): A tuple or dict with the outputs we desired.
+        """
         # Decide whether to return a dict or a tuple
         return_dict = return_dict if return_dict is not None else self.config.return_dict
 

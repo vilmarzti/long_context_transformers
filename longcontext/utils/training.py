@@ -10,10 +10,26 @@ from transformers import TransfoXLLMHeadModel
 
 
 def perplexity(model, input_ids, attention_mask):
+    """Computes the perplexity of a model for a given input_sequence by
+    producing the next-word probabilities of all subsequences. 
+    For numerical stability we compute the exp(log(PPL))
 
+    Args:
+        model (PreTrainedModel): The Model for which we want to compute 
+            the perplexity
+        input_ids (torch.FloatTensor): Batch of input tokens. Is of size (B, S) where
+        B is the batch size and S is the sequence length.
+        attention_mask (torch.LongTensor): Mask which indicate padding in the sequences.
+            Has the same size as input_ids
+
+    Returns:
+        List[torch.FloatTensor]: A list with the associated perplexities. Note that some
+            sequences are just padding. These sequences will return no perplexity
+    """
+
+    # Make list of sequences
     sentence_token = torch.unbind(input_ids)
     sentence_mask = torch.unbind(attention_mask)
-
     
     # Compute Perplexity for a sentence
     perplexities = []
@@ -34,14 +50,20 @@ def perplexity(model, input_ids, attention_mask):
 
             sub_sequence_probs.append(probs)
 
-        # Compute perplexity. If the whole sentence is just padding skip this
+        # Compute perplexity. If the whole sentence is padding skip
         if len(sub_sequence_probs) > 0:
             sub_sequence_probs = torch.stack(sub_sequence_probs)
+
+            # Perplexity direct
             # perplexity = torch.pow(torch.prod(1.0 / sub_sequence_probs.double()), 1/sub_sequence_probs.size(0))
+
+            # exp(log(PPL))
             perplexity = torch.exp((-1.0 / sub_sequence_probs.size(0)) * torch.log(sub_sequence_probs).sum())
+
             perplexities.append(perplexity.item())
 
     return perplexities
+
 
 def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu"):
     """ The training loop with validation.
@@ -139,6 +161,6 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                 average_loss = sum(losses) / len(losses)
                 
                 print(f"{epoch} in {epochs} done ")
-                print(f"avg_loss: {average_loss/len(valid_loader)} avg_ppl: {average_ppl/len(valid_loader)}")
+                print(f"avg_loss: {average_loss} avg_ppl: {average_ppl}")
 
     return model
