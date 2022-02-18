@@ -7,9 +7,12 @@
         https://github.com/neqkir/attention-mechanism
         `Left-ward flow`in Attention is all you need
 """
+from transformers.models.longformer.modeling_longformer import LongformerBaseModelOutput
 from transformers import LongformerPreTrainedModel
 from torch import nn
 
+class LongFormerLMHeadModelOutput(LongformerBaseModelOutput):
+    pass
 
 class LongFormerLMHeadModel(LongformerPreTrainedModel):
     """

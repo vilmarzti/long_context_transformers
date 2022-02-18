@@ -8,6 +8,8 @@ from tqdm import tqdm
 
 from transformers import TransfoXLLMHeadModel
 
+from longcontext.utils.attributes import get_attribute
+
 
 def perplexity(model, input_ids, attention_mask):
     """Computes the perplexity of a model for a given input_sequence by
@@ -106,12 +108,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                 outputs = model(input_ids=input_ids, labels=input_ids)
 
             # Accumulate losses if necessary
-            if hasattr(outputs, "loss"):
-                loss = outputs.loss
-            elif hasattr(outputs, "losses"):
-                loss = torch.sum(outputs.losses)
-            else:
-                raise AttributeError("outputs neither contain attribute `loss` or `losses`")
+            loss = get_attribute(outputs, "loss")
 
             # Backprop
             loss.backward()
@@ -147,16 +144,10 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     else:
                         outputs = model(input_ids=input_ids, labels=input_ids)
 
-                    # Accumulate losses if necessary
-                    if hasattr(outputs, "loss"):
-                        loss = outputs.loss
-                    elif hasattr(outputs, "losses"):
-                        loss = outputs["prediction_loss"]
-                    else:
-                        raise AttributeError("outputs neither contain attribute `loss` or `losses`")
-                    
-                    losses.append(loss.item())
+                   
+                    loss = get_attribute(outputs, "outputs")
 
+                    losses.append(loss.item())
 
                     # compute perplexity
                     perplexities.extend(perplexity(model, input_ids, attention_mask))
