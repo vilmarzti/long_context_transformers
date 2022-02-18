@@ -47,8 +47,8 @@ def get_dataloader(tokenizer, batch_size=8, samples=1000):
         test_dataset = tokenized_dataset["test"].shuffle(seed=42)
 
     # Get Dataloader
-    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=8)
-    valid_loader = DataLoader(valid_dataset, batch_size=8)
-    test_loader = DataLoader(test_dataset, batch_size=8)
+    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
     return (train_loader, valid_loader, test_loader)

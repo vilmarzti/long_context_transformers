@@ -26,7 +26,7 @@ def main():
     model.to(device)
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, 16, 200)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, 8, 500)
 
     # Set optimizer
     optimizer = AdamW(model.parameters())

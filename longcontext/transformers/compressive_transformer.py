@@ -884,7 +884,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         return CompressiveTransformerLMHeadModelOutput(
             losses=loss,
-            prediction_loss=ce_losses,
+            prediction_loss=ce_losses.mean(),
             attention_reconstruction_loss=attention_reconstruction_loss,
             logits=logits,
             mems=transformer_output.mems,

@@ -34,7 +34,7 @@ def perplexity(model, input_ids, attention_mask):
 
             sub_sequence_probs.append(probs)
 
-        # Compute perplexity if the whole sentence is just padding skip this
+        # Compute perplexity. If the whole sentence is just padding skip this
         if len(sub_sequence_probs) > 0:
             sub_sequence_probs = torch.stack(sub_sequence_probs)
             # perplexity = torch.pow(torch.prod(1.0 / sub_sequence_probs.double()), 1/sub_sequence_probs.size(0))
@@ -125,7 +125,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     if hasattr(outputs, "loss"):
                         loss = outputs.loss
                     elif hasattr(outputs, "losses"):
-                        loss = torch.mean(outputs.losses)
+                        loss = outputs["prediction_loss"]
                     else:
                         raise AttributeError("outputs neither contain attribute `loss` or `losses`")
                     
