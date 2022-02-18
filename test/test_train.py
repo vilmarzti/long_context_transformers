@@ -27,7 +27,7 @@ class TrainingTestCase(unittest.TestCase):
         cls.tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
 
         # Get Dataloaders processed by TransfoXLTokenizer
-        cls.train_loader, cls.valid_loader, _ = get_dataloader(cls.tokenizer, 8, 24)
+        cls.train_loader, cls.valid_loader, _ = get_dataloader(cls.tokenizer, 4, 16)
     
     @classmethod
     def tearDownClass(cls):
@@ -83,5 +83,7 @@ class TrainingTestCase(unittest.TestCase):
         except:
             self.fail("Could not train long-former for 1 epoch")
 
+if __name__ == "__main__":
+    unittest.main()
 
 

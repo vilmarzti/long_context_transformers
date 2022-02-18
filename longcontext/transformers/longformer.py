@@ -33,7 +33,7 @@ class LongFormerLMHeadModel(LongformerPreTrainedModel):
                 The config should include the hidden size and the vocab_size
         """
         # Set up the Longformer
-        super.__init__(config)
+        super().__init__(config)
 
         # Set up the linear layer for LM
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
@@ -41,5 +41,5 @@ class LongFormerLMHeadModel(LongformerPreTrainedModel):
         # Post cleanup
         self.post_init()
     
-    def forward():
+    def forward(input_ids=None, attention_mask=None, labels=None):
         pass

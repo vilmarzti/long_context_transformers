@@ -8,7 +8,7 @@ from longcontext.utils.training import train
 def main():
     # Create Model
     config = TransfoXLConfig(
-        n_layer=6
+        n_layer=2
     )
     model = TransfoXLLMHeadModel(config)
 

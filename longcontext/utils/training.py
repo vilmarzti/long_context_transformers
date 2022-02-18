@@ -44,7 +44,11 @@ def perplexity(model, input_ids, attention_mask):
 
             token_head = tokens[:i].unsqueeze(dim=0)
             mask_head = attn[:i].unsqueeze(dim=0)
-            outputs = model(token_head, attention_mask=mask_head, labels=token_head)
+
+            if not isinstance(model, TransfoXLLMHeadModel):
+                outputs = model(token_head, attention_mask=mask_head, labels=token_head)
+            else:
+                outputs = model(token_head, labels=token_head)
             logits = outputs["logits"][:,-1]
             probs = probs = torch.max(F.softmax(logits, dim=-1), dim=-1).values
 
@@ -96,7 +100,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
             # Let it run through the Model
             # The TransformerXL model doesn't have an attention_mask input
-            if model is not TransfoXLLMHeadModel:
+            if not isinstance(model, TransfoXLLMHeadModel):
                 outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
             else:
                 outputs = model(input_ids=input_ids, labels=input_ids)
@@ -138,7 +142,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                     # Let it run through the Model
                     # The TransformerXL model doesn't have an attention_mask input
-                    if model is not TransfoXLLMHeadModel:
+                    if not isinstance(model, TransfoXLLMHeadModel):
                         outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
                     else:
                         outputs = model(input_ids=input_ids, labels=input_ids)
