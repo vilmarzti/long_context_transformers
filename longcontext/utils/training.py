@@ -11,6 +11,7 @@ from transformers import TransfoXLLMHeadModel
 from longcontext.utils.attributes import get_attribute
 
 
+@torch.no_grad()
 def perplexity(model, input_ids, attention_mask):
     """Computes the perplexity of a model for a given input_sequence by
     producing the next-word probabilities of all subsequences. 
@@ -51,8 +52,10 @@ def perplexity(model, input_ids, attention_mask):
                 outputs = model(token_head, attention_mask=mask_head, labels=token_head)
             else:
                 outputs = model(token_head, labels=token_head)
-            logits = outputs["logits"][:,-1]
-            probs = probs = torch.max(F.softmax(logits, dim=-1), dim=-1).values
+
+            # Get probability for the chosen last word
+            prediction_scores = get_attribute(outputs, "prediction_scores")
+            probs = torch.max(prediction_scores, dim=-1).values[:,-1].squeeze()
 
             sub_sequence_probs.append(probs)
 
@@ -110,6 +113,10 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             # Accumulate losses if necessary
             loss = get_attribute(outputs, "loss")
 
+            # Reduce loss if necessary
+            if loss.dim() > 0:
+                loss = loss.mean()
+
             # Backprop
             loss.backward()
             optimizer.step()
@@ -146,6 +153,9 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                    
                     loss = get_attribute(outputs, "outputs")
+
+                    if loss.dim() > 0:
+                        loss = loss.mean()
 
                     losses.append(loss.item())
 

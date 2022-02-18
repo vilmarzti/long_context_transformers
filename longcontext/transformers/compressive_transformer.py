@@ -105,8 +105,8 @@ class CompressiveTransformerLMHeadModelOutput(TransfoXLLMHeadModelOutput):
         c_mem (List[torch.FloatTensor]): A list with the compressed memories for
         each layer in the Compressive Transformer
     """
-    logits: torch.FloatTensor = None
     prediction_loss: torch.FloatTensor = None
+    prediction_scores: torch.FloatTensor = None
     attention_reconstruction_loss: torch.FloatTensor = None
     c_mems: List[torch.FloatTensor] = None
 
@@ -900,10 +900,10 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             hidden_states = transformer_output[4]
 
         # Get Softmax of last hidden_state
-        logits = last_hidden_state[:, -sequence_length:]
+        prediction_scores = F.softmax(last_hidden_state, dim=-1)
 
         # Compute losses
-        ce_losses = self.crit(logits, labels)
+        ce_losses = self.crit(last_hidden_state, labels)
         ce_losses = ce_losses.view(
             batch_size, sequence_length - 1) if labels is not None else None
 
@@ -917,14 +917,14 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             loss = ce_losses.mean() + attention_reconstruction_loss
         
         if not return_dict:
-            output = (logits,) + transformer_output[1:]
+            output = (prediction_scores,) + transformer_output[1:]
             return ((loss,) + output) if loss is not None else output
 
         return CompressiveTransformerLMHeadModelOutput(
             losses=loss,
-            prediction_loss=ce_losses.mean(),
+            prediction_loss=ce_losses,
             attention_reconstruction_loss=attention_reconstruction_loss,
-            logits=logits,
+            prediction_scores=prediction_scores,
             mems=transformer_output.mems,
             hidden_states=transformer_output.hidden_states,
             attentions=transformer_output.attentions,

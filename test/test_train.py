@@ -66,6 +66,7 @@ class TrainingTestCase(unittest.TestCase):
         except:
             self.fail("Could not train Transformer-XL for 1 epoch")
     
+    @unittest.SkipTest
     def test_longformer(self):
         # Create model
         config = LongformerConfig(
