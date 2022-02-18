@@ -51,10 +51,16 @@ def perplexity(model, input_ids, attention_mask):
             if not isinstance(model, TransfoXLLMHeadModel):
                 outputs = model(token_head, attention_mask=mask_head, labels=token_head)
             else:
-                outputs = model(token_head, labels=token_head)
+                outputs = model(token_head, labels=token_head, output_hidden_states=True)
 
             # Get probability for the chosen last word
-            prediction_scores = get_attribute(outputs, "prediction_scores")
+            if isinstance(model, TransfoXLLMHeadModel):
+                outputs = get_attribute(outputs, "hidden_states")
+                logits = outputs[-1][:, -i:]
+                prediction_scores = F.softmax(logits, dim=-1)
+            else:
+                prediction_scores = get_attribute(outputs, "prediction_scores")
+
             probs = torch.max(prediction_scores, dim=-1).values[:,-1].squeeze()
 
             sub_sequence_probs.append(probs)
