@@ -873,13 +873,15 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         # Compute losses
         ce_losses = self.crit(last_hidden_state, labels)
-        ce_losses = ce_losses.view(
-            batch_size, sequence_length - 1) if labels is not None else None
-        
+
         prediction_scores = ce_losses.view(
-            batch_size, sequence_length -1
+            batch_size, sequence_length, -1
         ) if labels is None else ()
 
+        ce_losses = ce_losses.view(
+            batch_size, sequence_length - 1
+        ) if labels is not None else None
+        
         attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
             hidden_states=hidden_states,
             memories=mems_to_compress
@@ -888,6 +890,8 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         # Accumulate prediction and reconstruction loss
         if labels is not None:
             loss = ce_losses.mean() + attention_reconstruction_loss
+        else:
+            loss = attention_reconstruction_loss
         
         if not return_dict:
             output = (prediction_scores,) + transformer_output[1:]
