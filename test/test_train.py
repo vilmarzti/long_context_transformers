@@ -39,7 +39,7 @@ class TrainingTestCase(unittest.TestCase):
 
     def test_compressive_transformer(self):
         # Create Model
-        config = CompressiveTransformerConfig(4, 10, vocab_size=self.tokenizer.vocab_size, n_layer=2, return_dict=True, output_hidden_states=True, cutoffs=[1000, 5000, 15000])
+        config = CompressiveTransformerConfig(1, 10, vocab_size=self.tokenizer.vocab_size, n_layer=2, return_dict=True, output_hidden_states=True, cutoffs=[1000, 5000, 15000])
         model = CompressiveTransformerWithLMHead(config)
         
         # Set optimizer
@@ -53,7 +53,10 @@ class TrainingTestCase(unittest.TestCase):
     
     def test_transformer_xl(self):
         config = TransfoXLConfig(
-            n_layer=6
+            vocab_size=self.tokenizer.vocab_size,
+            n_layer=1,
+            cutoffs=[1000, 5000, 15000],
+            return_dict=True
         )
         model = TransfoXLLMHeadModel(config)
 

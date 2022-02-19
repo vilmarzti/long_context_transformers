@@ -687,44 +687,15 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         # Put input_ids into embeddings
         input_embeddings = self.word_emb(input_ids)
 
-        # TODO: Check following if-clause of the code and how attention_masks work
-        # Resources:
-        #   https://medium.com/analytics-vidhya/masking-in-transformers-self-attention-mechanism-bad3c9ec235c
-        #   https://atcold.github.io/pytorch-Deep-Learning/en/week12/12-1/
-
         # Get appropriate memory lengths. This is necessary if the parameters mems/c_mems
         # Are not given (i.e. they are passed as None)
         mem_length = mems[0].size(0) if mems is not None else 0
         c_mem_length = c_mems[0].size(0) if c_mems is not None else 0
         key_length = mem_length + c_mem_length + query_length
 
-        # If we use the same attention length for all tokens
-        # Taken from the source code of the TransfoXLConfig
-        """
-        if self.same_length and (attention_mask is None or not torch.any(attention_mask)):
-            # Get tensor of shape [query_length, key_length] with the device set the same as the
-            # input embeddings
-            all_ones = input_embeddings.new_ones(
-                (query_length, key_length),
-                dtype=torch.uint8
-            )
-
-            mask_len = key_length - self.mem_length
-            if mask_len > 0:
-                mask_shift_len = query_length - mask_len
-            else:
-                mask_shift_len = query_length
-            attention_mask = (
-                torch.triu(all_ones, 1 + mem_length) + 
-                torch.tril(all_ones, -mask_shift_len))[:, :, None]  # -1
-        else:
-            auto_reg_attention_mask = torch.triu(
-                input_embeddings.new_ones((query_length, key_length),
-                dtype=torch.uint8),
-                diagonal=1 + mem_length
-                )[:, :, None]
-        """
-
+        # Resources:
+        #   https://medium.com/analytics-vidhya/masking-in-transformers-self-attention-mechanism-bad3c9ec235c
+        #   https://atcold.github.io/pytorch-Deep-Learning/en/week12/12-1/
         auto_reg_attention_mask = torch.triu(
             input_embeddings.new_ones((query_length, key_length),
             dtype=torch.uint8),
@@ -899,13 +870,15 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             mems_to_compress = transformer_output[3]
             hidden_states = transformer_output[4]
 
-        # Get Softmax of last hidden_state
-        prediction_scores = F.softmax(last_hidden_state, dim=-1)
 
         # Compute losses
         ce_losses = self.crit(last_hidden_state, labels)
         ce_losses = ce_losses.view(
             batch_size, sequence_length - 1) if labels is not None else None
+        
+        prediction_scores = ce_losses.view(
+            batch_size, sequence_length -1
+        ) if labels is None else ()
 
         attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
             hidden_states=hidden_states,

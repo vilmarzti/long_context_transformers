@@ -40,7 +40,7 @@ def perplexity(model, input_ids, attention_mask):
         sub_sequence_probs = []
 
         # Generate probabilities for subsequence of sentence
-        for i in range(1, tokens.size(0)):
+        for i in range(2, tokens.size(0)):
             # don't generate padding
             if attn[i] == 0.0:
                 break
@@ -48,22 +48,17 @@ def perplexity(model, input_ids, attention_mask):
             token_head = tokens[:i].unsqueeze(dim=0)
             mask_head = attn[:i].unsqueeze(dim=0)
 
-            if not isinstance(model, TransfoXLLMHeadModel):
-                outputs = model(token_head, attention_mask=mask_head, labels=token_head)
+            if isinstance(model, TransfoXLLMHeadModel):
+                outputs = model(token_head, output_hidden_states=True)
             else:
-                outputs = model(token_head, labels=token_head, output_hidden_states=True)
+                outputs = model(token_head, attention_mask=mask_head)
 
             # Get probability for the chosen last word
-            if isinstance(model, TransfoXLLMHeadModel):
-                outputs = get_attribute(outputs, "hidden_states")
-                logits = outputs[-1][:, -i:]
-                prediction_scores = F.softmax(logits, dim=-1)
-            else:
-                prediction_scores = get_attribute(outputs, "prediction_scores")
+            prediction_scores = get_attribute(outputs, "prediction_scores")
+            probababilities = F.softmax(prediction_scores, dim=-1)[0,-1]
+            token_prob = probababilities[token_head[0, -1]]
 
-            probs = torch.max(prediction_scores, dim=-1).values[:,-1].squeeze()
-
-            sub_sequence_probs.append(probs)
+            sub_sequence_probs.append(token_prob)
 
         # Compute perplexity. If the whole sentence is padding skip
         if len(sub_sequence_probs) > 0:
