@@ -2,6 +2,7 @@ env/
 project_env/
 .vscode/
 data/
+runs/
 
 __pycache__
 *.egg-info
