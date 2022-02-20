@@ -7,10 +7,27 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from transformers import TransfoXLLMHeadModel
+from longcontext.transformers.compressive_transformer import CompressiveTransformerWithLMHead
 
 from longcontext.utils.helpers import construct_args, get_attribute
 from longcontext.utils.metrics import perplexity
 
+
+def forward_pass(model, input_ids, attention_mask):
+    if isinstance(model, (TransfoXLLMHeadModel, CompressiveTransformerWithLMHead)):
+        input_ids = torch.split(input_ids, input_ids.size(1)//4, dim=1)
+        attention_mask = torch.split(attention_mask, attention_mask.size(1)//4, dim=1)
+
+        memories = {"mems": None, "c_mems": None} 
+        for ids, mask in zip(input_ids, attention_mask):
+            args, kwargs = construct_args(model, ids, mask, memories)
+            outputs = model(*args, **kwargs)
+
+
+    else:
+        args, kwargs = construct_args(model, input_ids, attention_mask)
+        outputs = model(*args, **kwargs)
+    return outputs
 
 def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu"):
     """ The training loop with validation.
@@ -44,14 +61,9 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
 
-            # Let it run through the Model
-            # The TransformerXL model doesn't have an attention_mask input
-            if not isinstance(model, TransfoXLLMHeadModel):
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-            else:
-                outputs = model(input_ids=input_ids, labels=input_ids)
+            outputs = forward_pass(model, input_ids, attention_mask)
 
-            # Accumulate losses if necessary
+            # Get loss
             loss = get_attribute(outputs, "loss")
 
             # Reduce loss if necessary
@@ -81,10 +93,8 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     input_ids = batch["input_ids"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
 
-                    args, kwargs = construct_args(model, input_ids, attention_mask, None)
-
-                    outputs = model(*args, **kwargs)
-                   
+                    outputs = forward_pass(model, input_ids, attention_mask)
+                  
                     loss = get_attribute(outputs, "outputs")
 
                     if loss.dim() > 0:

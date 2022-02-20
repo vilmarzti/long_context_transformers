@@ -33,7 +33,7 @@ def construct_args(model, input_ids, attention_mask, memories=None, ):
         args = [input_ids]
         kwargs = {
             "labels": input_ids,
-            "mems": memories
+            "mems": memories["mems"]
         }
     elif isinstance(model, CompressiveTransformerWithLMHead):
         args = [input_ids]
