@@ -668,11 +668,11 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             attention_mask = attention_mask.transpose(0, 1).contiguous()
 
         # Initialize memories if not given
-        if mems is None or not torch.any(mems):
+        if mems is None or len(mems) == 0:
             mems = self.init_memories(self.mem_length, batch_size)
 
         # Intialize compressed memories if not given
-        if c_mems is None or not torch.any(c_mems):
+        if c_mems is None or len(c_mems) == 0:
             c_mems = self.init_memories(self.c_mem_length, batch_size)
 
         # Get head_mask into appropriate size. Currently only one dimension is supported

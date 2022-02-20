@@ -32,7 +32,7 @@ def main():
     optimizer = AdamW(model.parameters())
 
     # train
-    train(model, train_loader, optimizer, 100, valid_loader, device=device)
+    train(model, train_loader, optimizer, 100, valid_loader, device=device, subsequence_len=20)
 
 if __name__ == "__main__":
     main()

@@ -6,30 +6,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 
-from transformers import TransfoXLLMHeadModel
-from longcontext.transformers.compressive_transformer import CompressiveTransformerWithLMHead
-
-from longcontext.utils.helpers import construct_args, get_attribute
+from longcontext.utils.helpers import forward_pass, get_attribute
 from longcontext.utils.metrics import perplexity
 
 
-def forward_pass(model, input_ids, attention_mask):
-    if isinstance(model, (TransfoXLLMHeadModel, CompressiveTransformerWithLMHead)):
-        input_ids = torch.split(input_ids, input_ids.size(1)//4, dim=1)
-        attention_mask = torch.split(attention_mask, attention_mask.size(1)//4, dim=1)
-
-        memories = {"mems": None, "c_mems": None} 
-        for ids, mask in zip(input_ids, attention_mask):
-            args, kwargs = construct_args(model, ids, mask, memories)
-            outputs = model(*args, **kwargs)
-
-
-    else:
-        args, kwargs = construct_args(model, input_ids, attention_mask)
-        outputs = model(*args, **kwargs)
-    return outputs
-
-def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu"):
+def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu", subsequence_len=-1):
     """ The training loop with validation.
 
     Args:
@@ -45,6 +26,8 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             Defaults to None.
         device (string, optional): Either "cpu" or "cuda" for training on cpu/gpu.
             Defaults to "cpu"
+        subsequence_len (int, optional): The length of the subsequences for 
+            Transformer-XL and Compressive Transformer.
     """
     writer = SummaryWriter()
 
@@ -52,7 +35,6 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
     for epoch in range(1, epochs + 1):
         model.train()
         for batch in tqdm(train_loader, desc=f"Training Epoch {epoch}"):
-            input_ids = batch["input_ids"].to(device)
             # Get the appropriate columns
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
@@ -61,7 +43,8 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
 
-            outputs = forward_pass(model, input_ids, attention_mask)
+            # Forward Pass
+            outputs = forward_pass(model, input_ids, attention_mask, subsequence_len=subsequence_len)
 
             # Get loss
             loss = get_attribute(outputs, "loss")
@@ -93,7 +76,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     input_ids = batch["input_ids"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
 
-                    outputs = forward_pass(model, input_ids, attention_mask)
+                    outputs = forward_pass(model, input_ids, attention_mask, subsequence_len=subsequence_len)
                   
                     loss = get_attribute(outputs, "outputs")
 
@@ -103,7 +86,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     losses.append(loss.item())
 
                     # compute perplexity
-                    perplexities.extend(perplexity(model, input_ids, attention_mask))
+                    perplexities.extend(perplexity(model, input_ids, attention_mask, subsequence_len))
 
                 average_ppl = sum(perplexities) / len(perplexities)
                 average_loss = sum(losses) / len(losses)

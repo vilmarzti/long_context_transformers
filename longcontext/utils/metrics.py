@@ -6,8 +6,10 @@ from transformers import TransfoXLLMHeadModel
 
 from longcontext.utils.helpers import get_attribute
 
+from .helpers import forward_pass
+
 @torch.no_grad()
-def perplexity(model, input_ids, attention_mask):
+def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
     """Computes the perplexity of a model for a given input_sequence by
     producing the next-word probabilities of all subsequences. 
     For numerical stability we compute the exp(log(PPL))
@@ -19,6 +21,8 @@ def perplexity(model, input_ids, attention_mask):
         B is the batch size and S is the sequence length.
         attention_mask (torch.LongTensor): Mask which indicate padding in the sequences.
             Has the same size as input_ids
+        subsequence_len (int, optional): Used for Transformer-XL and compressive
+            Transformer to determine the length of the processed subsequences.
 
     Returns:
         List[torch.FloatTensor]: A list with the associated perplexities. Note that some
@@ -43,10 +47,7 @@ def perplexity(model, input_ids, attention_mask):
             token_head = tokens[:i].unsqueeze(dim=0)
             mask_head = attn[:i].unsqueeze(dim=0)
 
-            if isinstance(model, TransfoXLLMHeadModel):
-                outputs = model(token_head, output_hidden_states=True)
-            else:
-                outputs = model(token_head, attention_mask=mask_head)
+            outputs = forward_pass(model, token_head, mask_head, subsequence_len, use_labels=False)
 
             # Get probability for the chosen last word
             prediction_scores = get_attribute(outputs, "prediction_scores")
