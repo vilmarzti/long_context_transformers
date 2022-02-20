@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from transformers import TransfoXLLMHeadModel
 
-from longcontext.utils.attributes import get_attribute
+from longcontext.utils.helpers import construct_args, get_attribute
 from longcontext.utils.metrics import perplexity
 
 
@@ -81,17 +81,9 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     input_ids = batch["input_ids"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
 
-                    # Move to GPU if possible
-                    input_ids = input_ids.to(device)
-                    attention_mask = attention_mask.to(device)
+                    args, kwargs = construct_args(model, input_ids, attention_mask, None)
 
-                    # Let it run through the Model
-                    # The TransformerXL model doesn't have an attention_mask input
-                    if not isinstance(model, TransfoXLLMHeadModel):
-                        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-                    else:
-                        outputs = model(input_ids=input_ids, labels=input_ids)
-
+                    outputs = model(*args, **kwargs)
                    
                     loss = get_attribute(outputs, "outputs")
 

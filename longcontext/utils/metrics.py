@@ -4,7 +4,7 @@ import numpy as np
 
 from transformers import TransfoXLLMHeadModel
 
-from longcontext.utils.attributes import get_attribute
+from longcontext.utils.helpers import get_attribute
 
 @torch.no_grad()
 def perplexity(model, input_ids, attention_mask):

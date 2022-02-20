@@ -16,7 +16,7 @@ from longcontext.transformers.compressive_transformer import (
 from longcontext.transformers.longformer import LongFormerLMHeadModel
 
 from longcontext.utils.dataset import get_dataloader
-from longcontext.utils.training import train
+from longcontext import train
 
 
 class TrainingTestCase(unittest.TestCase):
