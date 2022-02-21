@@ -86,7 +86,7 @@ def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_label
         # Loss that get saved over the run over the subsequences
         general_outputs = GeneralOutput()
 
-        for ids, mask in zip(input_ids, attention_mask):
+        for i, (ids, mask) in enumerate(zip(input_ids, attention_mask)):
             # Construct the arguments for the model
             args, kwargs = construct_args(model, ids, mask, memories, output_labels=use_labels)
 
@@ -99,23 +99,27 @@ def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_label
                 memories["c_mems"] = get_attribute(outputs, "c_mems")
             
             # Accumulate loss and prediction scores
-            if get_attribute(general_outputs, "loss") == None:
+            if i == 0:
                 # Init loss and prediction scores
-                general_outputs["loss"] = get_attribute(outputs, "loss").unsqueeze(0)
+                general_outputs.loss = get_attribute(outputs, "loss")
 
                 if not use_labels:
-                    general_outputs["prediction_scores"] = get_attribute(outputs, "prediction_scores").detach().cpu().numpy()
+                    general_outputs.prediction_scores = get_attribute(outputs, "prediction_scores").detach().cpu().numpy()
             else:
-                # Accumulate
-                general_outputs["loss"] = torch.cat(
-                    (general_outputs["loss"], get_attribute(outputs, "loss").unsqueeze(0)), 
-                    dim=0
-                )
+                if not (general_outputs.loss is None):
+                    # Accumulate
+                    general_outputs.loss = torch.cat(
+                        (
+                            general_outputs.loss,
+                            get_attribute(outputs, "loss")
+                        ), 
+                        dim=0
+                    )
 
                 if not use_labels:
-                    general_outputs["prediction_scores"] = np.concatenate(
+                    general_outputs.prediction_scores = np.concatenate(
                         (
-                            get_attribute(general_outputs, "prediction_scores"), 
+                            general_outputs.prediction_scores, 
                             get_attribute(outputs, "prediction_scores").detach().cpu().numpy()
                         ),
                         axis=1

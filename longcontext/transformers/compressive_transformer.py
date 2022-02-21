@@ -860,6 +860,9 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
         else:
             loss = None
         
+        if loss is not None:
+            loss = loss.unsqueeze(0)
+        
         if not return_dict:
             output = (prediction_scores,) + transformer_output[1:]
             return ((loss,) + output) if loss is not None else output

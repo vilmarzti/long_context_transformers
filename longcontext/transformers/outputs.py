@@ -19,7 +19,7 @@ class GeneralOutput(ModelOutput):
         prediction_loss (torch.FloatTensor): the scores before softmax used to predict the next words
     """
     loss: torch.FloatStorage = None
-    prediction_loss : torch.FloatTensor = None
+    prediction_scores : torch.FloatTensor = None
 
 
 @dataclass
