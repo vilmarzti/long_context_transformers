@@ -12,10 +12,6 @@ Code adapted from:
     labml-ai: https://github.com/labmlai/annotated_deep_learning_paper_implementations
     Transfomer-XL: https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/transfo_xl/modeling_transfo_xl.py
 """
-
-from dataclasses import dataclass
-from typing import List
-
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -30,11 +26,14 @@ from transformers.models.transfo_xl.modeling_transfo_xl import (
     RelPartialLearnableMultiHeadAttn,
     AdaptiveEmbedding,
     PositionalEmbedding,
-    TransfoXLModelOutput,
-    TransfoXLLMHeadModelOutput,
 )
 
 from transformers.models.transfo_xl.modeling_transfo_xl_utilities import ProjectedAdaptiveLogSoftmax
+
+from .outputs import (
+    CompressiveTransformerLMHeadModelOutput,
+    CompressiveTransformerModelOutput
+)
 
 
 class CompressiveTransformerConfig(TransfoXLConfig):
@@ -73,42 +72,6 @@ class CompressiveTransformerConfig(TransfoXLConfig):
         # Set properties specific to Compressive transformer
         self.c_mem_length = c_mem_length
         self.compression_rate = compression_rate
-
-
-@dataclass
-class CompressiveTransformerModelOutput(TransfoXLModelOutput):
-    """Base Class for CompressiveTransformerModel output. It inherits from the
-    TransfoXLModelOutput and adds a field for the compressed Memory
-
-    Compare to:
-        https://github.com/huggingface/transformers/blob/v4.16.2/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L606
-
-    Additional Args:
-        c_mem (List[torch.FloatTensor]): A list with the compressed memories for
-            each layer in the C-Transformer
-
-    """
-    c_mems: List[torch.FloatTensor] = None
-    mems_to_compress: List[torch.FloatTensor] = None
-
-
-@dataclass
-class CompressiveTransformerLMHeadModelOutput(TransfoXLLMHeadModelOutput):
-    """Base class for CompressiveTransformerLMHeadModel output. It inherits
-    from the TransfoXLLMHeadModelOutput and adds a field for the compressed
-    memory.
-
-    Compare to:
-        https://github.com/huggingface/transformers/blob/4167519c3efa0f0fe867e82abe32c141147e0675/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L671
-
-    Additional Args:
-        c_mem (List[torch.FloatTensor]): A list with the compressed memories for
-        each layer in the Compressive Transformer
-    """
-    prediction_loss: torch.FloatTensor = None
-    prediction_scores: torch.FloatTensor = None
-    attention_reconstruction_loss: torch.FloatTensor = None
-    c_mems: List[torch.FloatTensor] = None
 
 
 class Conv1dCompression(nn.Module):
@@ -882,16 +845,20 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             batch_size, sequence_length - 1
         ) if labels is not None else None
         
-        attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
-            hidden_states=hidden_states,
-            memories=mems_to_compress
-        )
+        attention_reconstruction_loss = None
+        if len(mems_to_compress) > 0:
+            attention_reconstruction_loss = self.transformer.attention_reconstruction_loss(
+                hidden_states=hidden_states,
+                memories=mems_to_compress
+            )
 
         # Accumulate prediction and reconstruction loss
         if labels is not None:
-            loss = ce_losses.mean() + attention_reconstruction_loss
-        else:
+            loss = ce_losses.mean() + attention_reconstruction_loss if attention_reconstruction_loss else ce_losses.mean()
+        elif attention_reconstruction_loss:
             loss = attention_reconstruction_loss
+        else:
+            loss = None
         
         if not return_dict:
             output = (prediction_scores,) + transformer_output[1:]

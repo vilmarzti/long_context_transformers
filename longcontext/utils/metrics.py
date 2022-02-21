@@ -1,8 +1,7 @@
 import torch
-import torch.nn.functional as F
-import numpy as np
 
-from transformers import TransfoXLLMHeadModel
+import numpy as np
+from scipy.special import softmax
 
 from longcontext.utils.helpers import get_attribute
 
@@ -51,7 +50,7 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
 
             # Get probability for the chosen last word
             prediction_scores = get_attribute(outputs, "prediction_scores")
-            probababilities = F.softmax(prediction_scores, dim=-1)[0,-1]
+            probababilities = softmax(prediction_scores[0], axis=-1)[-1]
             token_prob = probababilities[token_head[0, -1]]
 
             sub_sequence_probs.append(token_prob.item())

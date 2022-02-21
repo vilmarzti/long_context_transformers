@@ -27,7 +27,7 @@ class TrainingTestCase(unittest.TestCase):
         cls.tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
 
         # Get Dataloaders processed by TransfoXLTokenizer
-        cls.train_loader, cls.valid_loader, _ = get_dataloader(cls.tokenizer, 4, 16)
+        cls.train_loader, cls.valid_loader, _ = get_dataloader(cls.tokenizer, 4, 16, 32)
     
     @classmethod
     def tearDownClass(cls):

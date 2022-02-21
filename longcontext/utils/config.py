@@ -1,17 +1,19 @@
+general = {
+    "loss": "loss",
+    "prediction_scores": "prediction_scores"
+}
+
 compressive_transformer = {
     "loss": "losses",
-    "outputs": "prediction_loss",
-    "logits": "logits"
+    "prediction_scores": "prediction_scores",
 }
 
 transformer_xl = {
     "loss": "losses",
-    "outputs": "losses",
-    "logits": "prediction_scores"
+    "prediction_scores": "prediction_scores",
 }
 
 longformer = {
     "loss": "loss",
-    "outputs": "loss",
-    "logits": "notimplmented"
+    "prediction_loss": "loss",
 }

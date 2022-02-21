@@ -4,35 +4,46 @@ import torch
 from transformers import TransfoXLLMHeadModel
 from transformers.models.transfo_xl.modeling_transfo_xl import TransfoXLLMHeadModelOutput 
 
-from longcontext.transformers.compressive_transformer import CompressiveTransformerLMHeadModelOutput, CompressiveTransformerWithLMHead
-from longcontext.transformers.longformer import LongFormerLMHeadModelOutput 
+from ..transformers.outputs import (
+    CompressiveTransformerLMHeadModelOutput,
+    GeneralOutput
+)
 
-from .config import transformer_xl, compressive_transformer, longformer
+from ..transformers.compressive_transformer import CompressiveTransformerWithLMHead
+from ..transformers.longformer import LongFormerLMHeadModelOutput 
+
+from .config import (
+    transformer_xl,
+    compressive_transformer,
+    longformer,
+    general
+)
 
 
 def get_attribute(output, key):
     out = None
     if isinstance(output, TransfoXLLMHeadModelOutput):
         if key in  transformer_xl.keys():
-            out = output[transformer_xl[key]]
+            out = getattr(output, transformer_xl[key])
 
     elif isinstance(output, CompressiveTransformerLMHeadModelOutput):
         if key in compressive_transformer.keys():
-            out = output[compressive_transformer[key]]
+            out = getattr(output, compressive_transformer[key])
 
     elif isinstance(output, LongFormerLMHeadModelOutput):
-        if key in longformer.keys() :
-            out = output[longformer[key]]
-    
+        if key in longformer.keys():
+            out = getattr(output, longformer[key])
+
+    elif isinstance(output, GeneralOutput):
+        if key in general.keys():
+            out = getattr(output, general[key])
+
     else:
         try:
-            out = output[key]
+            out = getattr(output, key)
         except KeyError:
-            raise ValueError(f"Output of type {type(output)} not found.")
+            raise ValueError(f"Output for type {type(output)} and {key} not found.")
     
-    if out is None:
-        out = output[key]
-
     return out
 
 def construct_args(model, input_ids, attention_mask, memories=None, output_labels=True):
@@ -73,10 +84,7 @@ def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_label
         } 
 
         # Loss that get saved over the run over the subsequences
-        final_outputs = {
-            "loss": None,
-            "prediction_scores": [] 
-        }
+        general_outputs = GeneralOutput()
 
         for ids, mask in zip(input_ids, attention_mask):
             # Construct the arguments for the model
@@ -90,27 +98,31 @@ def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_label
             if isinstance(model, CompressiveTransformerWithLMHead):
                 memories["c_mems"] = get_attribute(outputs, "c_mems")
             
-            # Accumulate loss
-            if final_outputs["loss"] == None:
-                final_outputs["loss"] = get_attribute(outputs, "loss").unsqueeze(0)
+            # Accumulate loss and prediction scores
+            if get_attribute(general_outputs, "loss") == None:
+                # Init loss and prediction scores
+                general_outputs["loss"] = get_attribute(outputs, "loss").unsqueeze(0)
+
+                if not use_labels:
+                    general_outputs["prediction_scores"] = get_attribute(outputs, "prediction_scores").detach().cpu().numpy()
             else:
-                final_outputs["loss"] = torch.cat(
-                    (final_outputs["loss"], get_attribute(outputs, "loss").unsqueeze(0)), 
+                # Accumulate
+                general_outputs["loss"] = torch.cat(
+                    (general_outputs["loss"], get_attribute(outputs, "loss").unsqueeze(0)), 
                     dim=0
                 )
-            
-            if not use_labels:
-                final_outputs["prediction_scores"] = np.cat(
-                    (final_outputs["prediction_scores"], get_attribute(outputs, "prediction_loss").to_numpy()),
-                    dim=1
-                )
 
-        # Mean over the accumulated losses
-        final_outputs["loss"] = final_outputs["loss"].mean()
-        final_outputs["outputs"] = final_outputs["loss"].mean()
+                if not use_labels:
+                    general_outputs["prediction_scores"] = np.concatenate(
+                        (
+                            get_attribute(general_outputs, "prediction_scores"), 
+                            get_attribute(outputs, "prediction_scores").detach().cpu().numpy()
+                        ),
+                        axis=1
+                    )
 
         # Reassign
-        outputs = final_outputs
+        outputs = general_outputs
     # Normal Forward Pass
     else:
         args, kwargs = construct_args(model, input_ids, attention_mask)

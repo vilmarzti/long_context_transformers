@@ -78,7 +78,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                     outputs = forward_pass(model, input_ids, attention_mask, subsequence_len=subsequence_len)
                   
-                    loss = get_attribute(outputs, "outputs")
+                    loss = get_attribute(outputs, "loss")
 
                     if loss.dim() > 0:
                         loss = loss.mean()
