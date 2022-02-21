@@ -5,7 +5,7 @@
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 
-def get_dataloader(tokenizer, batch_size=8, samples=1000):
+def get_dataloader(tokenizer, batch_size=8, samples=1000, max_length=256):
     """Creates DataLoaders from wikitext2 encoded with a tokenizer
 
     Args:
@@ -25,7 +25,7 @@ def get_dataloader(tokenizer, batch_size=8, samples=1000):
 
     # Tokenize Dataset
     tokenized_dataset = dataset.map(
-        lambda samples: tokenizer(samples["text"], padding="max_length", truncation=True, max_length=218, return_attention_mask=True),
+        lambda samples: tokenizer(samples["text"], padding="max_length", truncation=True, max_length=max_length, return_attention_mask=True),
         batched=True
     )
     tokenized_dataset.set_format("torch")

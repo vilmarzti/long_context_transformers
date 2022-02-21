@@ -26,13 +26,13 @@ def main():
     model.to(device)
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, 4, 200)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, 4, 100, 100)
 
     # Set optimizer
     optimizer = AdamW(model.parameters())
 
     # train
-    train(model, train_loader, optimizer, 100, valid_loader, device=device, subsequence_len=20)
+    train(model, train_loader, optimizer, 100, valid_loader, device=device, subsequence_len=50)
 
 if __name__ == "__main__":
     main()

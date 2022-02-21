@@ -47,7 +47,7 @@ class TrainingTestCase(unittest.TestCase):
 
         try:
             # train
-            train(model, self.train_loader, optimizer, 1, self.valid_loader)
+            train(model, self.train_loader, optimizer, 1, self.valid_loader, subsequence_len=8)
         except:
             self.fail("Could not train Compressive Transformer for 1 epoch")
     
@@ -64,8 +64,7 @@ class TrainingTestCase(unittest.TestCase):
         optimizer = AdamW(model.parameters())
 
         try:
-            # train
-            train(model, self.train_loader, optimizer, 1, self.valid_loader)
+            train(model, self.train_loader, optimizer, 1, self.valid_loader, subsequence_len=8)
         except:
             self.fail("Could not train Transformer-XL for 1 epoch")
     
