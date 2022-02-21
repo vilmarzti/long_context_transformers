@@ -9,12 +9,15 @@ cachetools==5.0.0
 certifi==2021.10.8
 charset-normalizer==2.0.10
 click==8.0.3
+cycler==0.11.0
 datasets==1.18.0
 dill==0.3.4
 einops==0.4.0
 filelock==3.4.2
+fonttools==4.29.1
 frozenlist==1.3.0
 fsspec==2022.1.0
+future==0.18.2
 gitdb==4.0.9
 GitPython==3.1.26
 google-auth==2.6.0
@@ -25,12 +28,14 @@ idna==3.3
 importlib-metadata==4.10.1
 isort==5.10.1
 joblib==1.1.0
+kiwisolver==1.3.2
 labml==0.4.144
 labml-helpers==0.4.84
 labml-nn==0.4.118
 lazy-object-proxy==1.7.1
--e git+ssh://git@github.com/vilmarzti/long_context_transformers.git@af5f326d2da61831b3f84d51911d8e0f7a0e584e#egg=longcontext
+-e git+ssh://git@github.com/vilmarzti/long_context_transformers.git@30c1d9b172d833660f1947688d734bbabe451b40#egg=longcontext
 Markdown==3.3.6
+matplotlib==3.5.1
 mccabe==0.6.1
 multidict==6.0.1
 multiprocess==0.70.12.2
@@ -46,9 +51,11 @@ pyarrow==6.0.1
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 pycodestyle==2.8.0
+pyDeprecate==0.3.1
 pylint==2.12.2
 pyparsing==3.0.6
 python-dateutil==2.8.2
+pytorch-lightning==1.5.10
 pytz==2021.3
 PyYAML==6.0
 regex==2021.11.10
@@ -56,6 +63,7 @@ requests==2.27.1
 requests-oauthlib==1.3.1
 rsa==4.8
 sacremoses==0.0.47
+scipy==1.8.0
 six==1.16.0
 smmap==5.0.0
 tensorboard==2.8.0
@@ -65,6 +73,7 @@ tokenizers==0.10.3
 toml==0.10.2
 torch==1.10.2
 torchaudio==0.10.1+cu113
+torchmetrics==0.7.2
 torchtext==0.11.2
 torchvision==0.11.3
 tqdm==4.62.3
