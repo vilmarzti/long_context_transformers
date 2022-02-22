@@ -96,8 +96,8 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                 average_ppl = sum(perplexities) / len(perplexities)
                 average_loss = sum(losses) / len(losses)
 
-                writer.add_scalar("Loss/test", average_loss, epoch)
-                writer.add_scalar("Loss/train", average_loss_train, epoch)
+                writer.add_scalars("Loss", {"valid": average_loss}, epoch)
+                writer.add_scalars("Loss", {"train": average_loss_train}, epoch)
                 writer.add_scalar("Perplexity/test", average_ppl, epoch)
 
                
