@@ -15,7 +15,8 @@ class GeneralOutput(ModelOutput):
     in Perplexity.
 
     Attrs:
-        loss (torch.FloatTensor):
+        loss (torch.FloatTensor): Generally the per-word Crossentropy. Has size (B, S) where B is the 
+            batch size and S is the sequence-length.
         prediction_loss (torch.FloatTensor): the scores before softmax used to predict the next words
     """
     loss: torch.FloatStorage = None

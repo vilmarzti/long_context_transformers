@@ -113,7 +113,7 @@ def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_label
                             general_outputs.loss,
                             get_attribute(outputs, "loss")
                         ), 
-                        dim=0
+                        dim=1
                     )
 
                 if not use_labels:
