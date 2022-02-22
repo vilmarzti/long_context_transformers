@@ -1,6 +1,7 @@
 """
     This module contains the training routine for our transformer models.
 """
+import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -34,6 +35,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
     for epoch in range(1, epochs + 1):
         model.train()
+        average_loss_train =[]
         for batch in tqdm(train_loader, desc=f"Training Epoch {epoch}"):
             # Get the appropriate columns
             input_ids = batch["input_ids"].to(device)
@@ -59,13 +61,16 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
             if lr_scheduler:
                 lr_scheduler.step()
+            
+            average_loss_train.append(loss.cpu().detach().item())
 
             # Reset optimizer
             optimizer.zero_grad()
         
+        average_loss_train = np.mean(average_loss_train)
+
         # set model for evaluation
         model.eval()
-
         if valid_loader:
             with torch.no_grad():
                 # Go through 
@@ -92,10 +97,11 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                 average_loss = sum(losses) / len(losses)
 
                 writer.add_scalar("Loss/test", average_loss, epoch)
+                writer.add_scalar("Loss/train", average_loss_train, epoch)
                 writer.add_scalar("Perplexity/test", average_ppl, epoch)
 
                
                 print(f"{epoch} in {epochs} done ")
-                print(f"avg_loss: {average_loss} avg_ppl: {average_ppl}")
+                print(f"avg_loss_train: {average_loss_train} avg_loss_test: {average_loss} avg_ppl: {average_ppl}")
 
     return model
