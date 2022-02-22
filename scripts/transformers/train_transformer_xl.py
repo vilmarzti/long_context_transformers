@@ -10,7 +10,7 @@ def main():
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, 2, 128, 100)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, batch_size=4,  samples=16, max_length=32, valid_samples=4)
 
     # Create Model
     config = TransfoXLConfig(
@@ -28,7 +28,7 @@ def main():
     optimizer = AdamW(model.parameters())
 
     # train
-    train(model, train_loader, optimizer, 10, valid_loader, device=device, subsequence_len=50)
+    train(model, train_loader, optimizer, 100, valid_loader, device=device, subsequence_len=8)
     
 
 if __name__ == "__main__":
