@@ -16,7 +16,7 @@ def main():
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
         n_layer=4,
-        cutoffs=[1000, 5000, 15000],
+        cutoffs=[2222, 4444, 22222],
         return_dict=True
     )
     model = TransfoXLLMHeadModel(config)
