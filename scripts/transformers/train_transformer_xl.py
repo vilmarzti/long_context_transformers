@@ -6,12 +6,15 @@ from longcontext.utils.training import train
 
 
 def main():
-    epochs = 100
+    epochs = 30
+    max_length = 64
+
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
+    tokenizer.model_max_length = max_length
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, batch_size=4,  samples=256, max_length=128, valid_samples=32)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=512, batch_size=8, max_length=max_length, valid_samples=32)
 
     # Create Model
     config = TransfoXLConfig(
@@ -27,12 +30,12 @@ def main():
     model.to(device)
 
     # Set optimizer
-    optimizer = AdamW(model.parameters(), lr=0.1)
+    optimizer = AdamW(model.parameters(), lr=0.001)
 
     lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=0, num_training_steps=epochs)
 
     # train
-    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=64, lr_scheduler=lr_scheduler)
+    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, lr_scheduler=lr_scheduler)
     
 
 if __name__ == "__main__":

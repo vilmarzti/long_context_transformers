@@ -5,6 +5,7 @@
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 
+
 def get_dataloader(tokenizer, batch_size=8, samples=1000, max_length=256, valid_samples=64):
     """Creates DataLoaders from wikitext2 encoded with a tokenizer
 
@@ -23,11 +24,13 @@ def get_dataloader(tokenizer, batch_size=8, samples=1000, max_length=256, valid_
     # Load Dataset
     dataset = load_dataset("wikitext", name="wikitext-2-v1")
 
+
     # Tokenize Dataset
     tokenized_dataset = dataset.map(
-        lambda samples: tokenizer(samples["text"], padding="max_length", truncation=True, max_length=max_length, return_attention_mask=True),
-        batched=True
+        lambda samples : tokenizer(samples["text"], max_length=max_length, truncation=True)
+        #batched=True
     )
+    tokenized_dataset = tokenized_dataset.filter(lambda sample: len(sample["input_ids"]) == max_length)
     tokenized_dataset.set_format("torch")
 
     # Remove text and type_ids

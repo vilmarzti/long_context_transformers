@@ -38,8 +38,13 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
         average_loss_train =[]
         for batch in tqdm(train_loader, desc=f"Training Epoch {epoch}"):
             # Get the appropriate columns
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
+            input_ids = batch["input_ids"]
+
+            # Get attention_mask if supported
+            try:
+                attention_mask = batch["attention_mask"]
+            except KeyError:
+                attention_mask = torch.ones_like(input_ids)
 
             # Move to GPU if possible
             input_ids = input_ids.to(device)
@@ -79,7 +84,13 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                 for batch in tqdm(valid_loader, desc=f"Validation epoch {epoch}"):
                     # Get the appropriate columns
                     input_ids = batch["input_ids"].to(device)
-                    attention_mask = batch["attention_mask"].to(device)
+
+                    # Get attention_mask if supported
+                    try:
+                        attention_mask = batch["attention_mask"]
+                    except KeyError:
+                        attention_mask = torch.ones_like(input_ids)
+
 
                     outputs = forward_pass(model, input_ids, attention_mask, subsequence_len=subsequence_len)
                   
