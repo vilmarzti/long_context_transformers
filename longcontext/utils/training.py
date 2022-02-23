@@ -62,10 +62,10 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             if lr_scheduler:
                 lr_scheduler.step()
             
-            average_loss_train.append(loss.cpu().detach().item())
-
             # Reset optimizer
             optimizer.zero_grad()
+
+            average_loss_train.append(loss.cpu().detach().item())
         
         average_loss_train = np.mean(average_loss_train)
 
@@ -93,8 +93,8 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     # compute perplexity
                     perplexities.extend(perplexity(model, input_ids, attention_mask, subsequence_len))
 
-                average_ppl = sum(perplexities) / len(perplexities)
-                average_loss = sum(losses) / len(losses)
+                average_ppl = np.mean(perplexities, dtype=np.longdouble)
+                average_loss = np.mean(losses)
 
                 writer.add_scalars("Loss", {"valid": average_loss}, epoch)
                 writer.add_scalars("Loss", {"train": average_loss_train}, epoch)
