@@ -58,7 +58,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
             # Reduce loss if necessary
             if loss.dim() > 0:
-                loss = loss.mean()
+                loss = loss[:,-1].mean()
 
             # Backprop
             loss.backward()
