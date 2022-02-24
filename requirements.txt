@@ -33,7 +33,6 @@ labml==0.4.144
 labml-helpers==0.4.84
 labml-nn==0.4.118
 lazy-object-proxy==1.7.1
--e git+ssh://git@github.com/vilmarzti/long_context_transformers.git@e872ed344e9bc8cd8163803f5974948e0f39d5d3#egg=longcontext
 Markdown==3.3.6
 matplotlib==3.5.1
 mccabe==0.6.1
@@ -71,7 +70,6 @@ tensorboard-plugin-wit==1.8.1
 tokenizers==0.10.3
 toml==0.10.2
 torch==1.10.2
-torchaudio==0.10.1+cu113
 torchmetrics==0.7.2
 torchtext==0.11.2
 torchvision==0.11.3
