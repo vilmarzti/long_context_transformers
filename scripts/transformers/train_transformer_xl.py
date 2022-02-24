@@ -10,7 +10,7 @@ def main():
     max_length = 64
 
     # Get tokenizer
-    tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
+    tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2")
     tokenizer.model_max_length = max_length
 
     # Get Dataloaders processed by TransfoXLTokenizer

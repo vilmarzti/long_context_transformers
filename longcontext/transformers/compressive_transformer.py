@@ -574,14 +574,13 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         # Also return the mems_to_compress for Reconstruction loss
         return new_memory, compressed_memory, mems_to_compress
 
-    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, output_attentions=False, output_hidden_states=False, return_dict=None):
+    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, output_attentions=False, output_hidden_states=False, return_dict=None):
         """ The forward pass in the base Compressive Transformer layer
 
         Compare to:
             https://github.com/huggingface/transformers/blob/db7d6a80e82d66127b2a44b6e3382969fdc8b207/src/transformers/models/transfo_xl/modeling_transfo_xl.py#L878
             https://nn.labml.ai/transformers/compressive/index.html
 
-        TODO: mention Input-dimension
         Args:
             input_ids (torch.Tensor): Tensor with input ids from tokenization
             mems (List[torch.Tensor], optional): The previous hidden states as
@@ -591,9 +590,6 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
                 to a layer Defaults to None.
             head_mask (torch.Tensor, optional): The mask that says which heads
                 exclude. Defaults to None.
-            attention_mask (torch.Tensor, optional): Tensor that says which 
-                tokens are padding and should be ignored. 1 for keep and 0
-                for ignore. Defaults to None.
             output_attentions (bool, optional): Whether to output the attention
                 scores. Defaults to False.
             output_hidden_states (bool, optional): Whether to output the hidden
@@ -626,10 +622,6 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
         else:
             raise ValueError("input_ids has to be specified for forward pass")
         
-        # Transpose for unified library interface. See comment in TransfoXLModel
-        if attention_mask is not None:
-            attention_mask = attention_mask.transpose(0, 1).contiguous()
-
         # Initialize memories if not given
         if mems is None or len(mems) == 0:
             mems = self.init_memories(self.mem_length, batch_size)
@@ -665,10 +657,7 @@ class CompressiveTransfomerModel(CompressiveTransformerPretrainedModel):
             diagonal=1 + mem_length + c_mem_length
         )[:,:,None]
 
-        auto_reg_attention_mask = auto_reg_attention_mask.repeat((1, 1, batch_size))
-        attention_mask = attention_mask.unsqueeze(1).repeat((1, key_length, 1))
-        
-        att_mask = torch.logical_and(auto_reg_attention_mask, attention_mask)
+        att_mask = auto_reg_attention_mask
         
         # PREPARE FORWARD-PASS
 
@@ -781,7 +770,7 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
 
         self.post_init()
 
-    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, attention_mask=None, labels=None, output_attentions=False, output_hidden_states=False, return_dict=None):
+    def forward(self, input_ids, mems=None, c_mems=None, head_mask=None, labels=None, output_attentions=False, output_hidden_states=False, return_dict=None):
         """Makes one forwards pass for a given input sequence
 
         Args:
@@ -793,7 +782,6 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
                 Defaults to None.
             head_mask (torch.FloatTensor, optional): See Transformer-XL for documentation. Defaults to 
                 None
-            attention_mask (torch.FloatTensor, optional): A mask to signify what is padded. Defaults to None.
             labels (torch.LongTensor, optional): The token ids of the desired output. Defaults to None.
             output_attentions (bool, optional): Whether to output the attentions. Defaults to False.
             output_hidden_states (bool, optional): Whether we should output the hidden-states. Defaults to False.
@@ -815,7 +803,6 @@ class CompressiveTransformerWithLMHead(CompressiveTransformerPretrainedModel):
             mems=mems,
             c_mems=c_mems,
             head_mask=head_mask,
-            attention_mask=attention_mask,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict
