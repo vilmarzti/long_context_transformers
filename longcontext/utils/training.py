@@ -34,7 +34,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             Transformer-XL and Compressive Transformer.
     """
     if save_path is None:
-        save_path = path.join("data", datetime.now().strftime("%Y_%m_%d_%H"), type(model).__name__)
+        save_path = path.join("data", "transformers", "_".join([datetime.now().strftime("%Y_%m_%d_%H"), type(model).__name__]))
 
 
     writer = SummaryWriter()

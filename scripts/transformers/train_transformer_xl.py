@@ -7,14 +7,14 @@ from longcontext.utils.training import train
 
 def main():
     epochs = 30
-    max_length = 64
+    max_length = 32
 
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2")
     tokenizer.model_max_length = max_length
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=1024, batch_size=8, max_length=max_length, valid_samples=16)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=2048, batch_size=10, max_length=max_length, valid_samples=128)
 
     # Create Model
     config = TransfoXLConfig(
