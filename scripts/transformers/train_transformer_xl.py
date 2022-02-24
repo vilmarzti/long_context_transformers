@@ -14,12 +14,12 @@ def main():
     tokenizer.model_max_length = max_length
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=512, batch_size=8, max_length=max_length, valid_samples=32)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=1024, batch_size=8, max_length=max_length, valid_samples=16)
 
     # Create Model
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
-        n_layer=4,
+        n_layer=6,
         cutoffs=[2222, 4444, 22222],
         return_dict=True
     )
@@ -30,12 +30,12 @@ def main():
     model.to(device)
 
     # Set optimizer
-    optimizer = AdamW(model.parameters(), lr=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
 
-    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=0, num_training_steps=epochs)
+    #lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=5, num_training_steps=epochs)
 
     # train
-    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, lr_scheduler=lr_scheduler)
+    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=max_length)#, lr_scheduler=lr_scheduler)
     
 
 if __name__ == "__main__":

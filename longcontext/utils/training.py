@@ -1,17 +1,20 @@
 """
     This module contains the training routine for our transformer models.
 """
-import numpy as np
 import torch
-from torch.utils.tensorboard import SummaryWriter
+import numpy as np
+from os import path
+from datetime import datetime
 
 from tqdm import tqdm
+
+from torch.utils.tensorboard import SummaryWriter
 
 from longcontext.utils.helpers import forward_pass, get_attribute
 from longcontext.utils.metrics import perplexity
 
 
-def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu", subsequence_len=-1):
+def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu", subsequence_len=-1, save_path=None):
     """ The training loop with validation.
 
     Args:
@@ -30,9 +33,12 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
         subsequence_len (int, optional): The length of the subsequences for 
             Transformer-XL and Compressive Transformer.
     """
+    if save_path is None:
+        save_path = path.join("data", datetime.now().strftime("%Y_%m_%d_%H"), type(model).__name__)
+
+
     writer = SummaryWriter()
-
-
+    last_ppl = float("-inf")
     for epoch in range(1, epochs + 1):
         model.train()
         average_loss_train =[]
@@ -114,5 +120,9 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                
                 print(f"{epoch} in {epochs} done ")
                 print(f"avg_loss_train: {average_loss_train} avg_loss_test: {average_loss} avg_ppl: {average_ppl}")
+
+                if average_ppl > last_ppl:
+                    model.save_pretrained(save_path)
+                    last_ppl = average_ppl
 
     return model
