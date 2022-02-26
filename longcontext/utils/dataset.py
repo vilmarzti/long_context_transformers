@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from datasets import load_dataset
 
 
-def get_dataloader(tokenizer, batch_size=8, samples=1000, max_length=256, valid_samples=64):
+def get_dataloader(tokenizer, batch_size=8, samples=1000, max_length=256, valid_samples=None):
     """Creates DataLoaders from wikitext2 encoded with a tokenizer
 
     Args:
@@ -41,13 +41,16 @@ def get_dataloader(tokenizer, batch_size=8, samples=1000, max_length=256, valid_
     # Get Datasets
     if samples: 
         train_dataset = tokenized_dataset["train"].shuffle(seed=42).select(range(samples))
+    else:
+        train_dataset = tokenized_dataset["train"].shuffle(seed=42)
+   
+    if valid_samples:
         valid_dataset = tokenized_dataset["validation"].shuffle(seed=42).select(range(valid_samples))
         test_dataset = tokenized_dataset["test"].shuffle(seed=42).select(range(valid_samples))
     else:
-        train_dataset = tokenized_dataset["train"].shuffle(seed=42)
         valid_dataset = tokenized_dataset["validation"].shuffle(seed=42)
         test_dataset = tokenized_dataset["test"].shuffle(seed=42)
-
+ 
     # Get Dataloader
     train_loader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size)
