@@ -9,14 +9,15 @@ def main():
     epochs = 30
     max_length = 32
     batch_size = 10
-    samples = 1024
+    samples = None
+    valid_samples = 128
 
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2")
     tokenizer.model_max_length = max_length
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=samples, batch_size=10, max_length=max_length, valid_samples=128)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=samples, batch_size=10, max_length=max_length, valid_samples=valid_samples)
 
     # Create Model
     config = TransfoXLConfig(
@@ -34,7 +35,7 @@ def main():
     # Set optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
 
-    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=5, num_training_steps=epochs*samples/batch_size)
+    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=5, num_training_steps=epochs*len(train_loader))
 
     # train
     train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=max_length, lr_scheduler=lr_scheduler)
