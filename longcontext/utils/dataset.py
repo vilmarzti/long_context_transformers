@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from datasets import load_dataset
 
 
-def get_dataloader(tokenizer, batch_size=8, samples=1000, max_length=256, valid_samples=None):
+def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None):
     """Creates DataLoaders from wikitext2 encoded with a tokenizer
 
     Args:
