@@ -28,7 +28,6 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
     # Tokenize Dataset
     tokenized_dataset = dataset.map(
         lambda samples : tokenizer(samples["text"], max_length=max_length, truncation=True)
-        #batched=True
     )
     tokenized_dataset = tokenized_dataset.filter(lambda sample: len(sample["input_ids"]) == max_length)
     tokenized_dataset.set_format("torch")

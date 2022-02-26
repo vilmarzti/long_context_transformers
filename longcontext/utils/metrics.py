@@ -54,11 +54,11 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
 
             # Get log probabilities. Tranformer-XL outputs them directly
             if isinstance(model, TransfoXLLMHeadModel):
-                log_probababilities = prediction_scores[0, -1]
+                log_probabilities = prediction_scores[0, -1]
             else:
-                log_probababilities = np.log(softmax(prediction_scores[0], axis=-1))[-1]
+                log_probabilities = np.log(softmax(prediction_scores[0], axis=-1))[-1]
 
-            token_prob = log_probababilities[token_head[0, -1]]
+            token_prob = log_probabilities[token_head[0, -1]]
 
             sub_sequence_log_probs.append(token_prob.item())
 

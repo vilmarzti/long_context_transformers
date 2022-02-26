@@ -7,10 +7,10 @@ from longcontext.utils.training import train
 
 def main():
     epochs = 30
-    max_length = 32
-    batch_size = 10
-    samples = 4096
-    valid_samples = 128
+    max_length = 64
+    batch_size = 8
+    samples = 100*batch_size
+    valid_samples = 4*batch_size
 
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2")
@@ -22,9 +22,11 @@ def main():
     # Create Model
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
-        n_layer=6,
+        n_layer=12,
         cutoffs=[2222, 4444, 22222],
-        return_dict=True
+        return_dict=True,
+        mem_len=1,
+        eos_token_id=tokenizer.eos_token_id,
     )
     model = TransfoXLLMHeadModel(config)
 
@@ -33,7 +35,7 @@ def main():
     model.to(device)
 
     # Set optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
 
     lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=5, num_training_steps=epochs*len(train_loader))
 

@@ -2,7 +2,8 @@ import numpy as np
 import torch
 
 from transformers import OpenAIGPTLMHeadModel, TransfoXLLMHeadModel
-from transformers.models.transfo_xl.modeling_transfo_xl import TransfoXLLMHeadModelOutput 
+from transformers.models.transfo_xl.modeling_transfo_xl import TransfoXLLMHeadModelOutput
+
 
 from ..transformers.outputs import (
     CompressiveTransformerLMHeadModelOutput,
