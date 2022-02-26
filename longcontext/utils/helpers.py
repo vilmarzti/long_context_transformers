@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from transformers import TransfoXLLMHeadModel
+from transformers import OpenAIGPTLMHeadModel, TransfoXLLMHeadModel
 from transformers.models.transfo_xl.modeling_transfo_xl import TransfoXLLMHeadModelOutput 
 
 from ..transformers.outputs import (
@@ -10,12 +10,13 @@ from ..transformers.outputs import (
 )
 
 from ..transformers.compressive_transformer import CompressiveTransformerWithLMHead
-from ..transformers.longformer import LongFormerLMHeadModelOutput 
+
+from transformers.modeling_outputs import CausalLMOutput
 
 from .config import (
     transformer_xl,
     compressive_transformer,
-    longformer,
+    gpt,
     general
 )
 
@@ -29,10 +30,10 @@ def get_attribute(output, key):
     elif isinstance(output, CompressiveTransformerLMHeadModelOutput):
         if key in compressive_transformer.keys():
             out = getattr(output, compressive_transformer[key])
-
-    elif isinstance(output, LongFormerLMHeadModelOutput):
-        if key in longformer.keys():
-            out = getattr(output, longformer[key])
+    
+    elif isinstance(output, CausalLMOutput):
+        if key in gpt.keys():
+            out = getattr(output, gpt[key])
 
     elif isinstance(output, GeneralOutput):
         if key in general.keys():
@@ -55,9 +56,13 @@ def construct_args(model, input_ids, attention_mask, memories=None, output_label
     elif isinstance(model, CompressiveTransformerWithLMHead):
         args = [input_ids]
         kwargs = {
-            "attention_mask": attention_mask,
             "mems": memories["mems"],
             "c_mems": memories["c_mems"]
+        }
+    elif isinstance(model, OpenAIGPTLMHeadModel):
+        args = [input_ids]
+        kwargs = {
+            "attention_mask": attention_mask
         }
     else:
         ValueError(f"Function for model of type {type(model)} has not been implemented")
@@ -68,6 +73,8 @@ def construct_args(model, input_ids, attention_mask, memories=None, output_label
     return args, kwargs
 
 def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_labels=True):
+    general_outputs = GeneralOutput()
+
     # Transformer-XL and Compressive Transformer learn with memories over the sequence
     if isinstance(model, (TransfoXLLMHeadModel, CompressiveTransformerWithLMHead)):
         # Split inot subsequences
@@ -84,7 +91,6 @@ def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_label
         } 
 
         # Loss that get saved over the run over the subsequences
-        general_outputs = GeneralOutput()
 
         for i, (ids, mask) in enumerate(zip(input_ids, attention_mask)):
             # Construct the arguments for the model
@@ -127,6 +133,21 @@ def forward_pass(model, input_ids, attention_mask, subsequence_len=-1, use_label
 
         # Reassign
         outputs = general_outputs
+
+    # Forwards for GPT
+    elif isinstance(model, OpenAIGPTLMHeadModel):
+        # Construct inputs
+        args, kwargs = construct_args(model, input_ids, attention_mask)
+
+        # Pass through model
+        outputs = model(*args, **kwargs)
+
+        # Read values
+        general_outputs.loss = get_attribute(outputs, "loss")
+        general_outputs.prediction_scores = get_attribute(outputs, "prediction_scores").detach().cpu().numpy()
+
+        outputs = general_outputs
+
     # Normal Forward Pass
     else:
         args, kwargs = construct_args(model, input_ids, attention_mask)

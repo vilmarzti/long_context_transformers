@@ -13,7 +13,7 @@ transformer_xl = {
     "prediction_scores": "prediction_scores",
 }
 
-longformer = {
-    "loss": "loss",
-    "prediction_loss": "loss",
+gpt = {
+    "loss" : "loss",
+    "prediction_scores": "logits"
 }
