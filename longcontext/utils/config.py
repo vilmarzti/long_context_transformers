@@ -11,6 +11,7 @@ compressive_transformer = {
 transformer_xl = {
     "loss": "losses",
     "prediction_scores": "prediction_scores",
+    "mems": "mems"
 }
 
 gpt = {
