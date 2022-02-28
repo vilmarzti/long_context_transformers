@@ -41,7 +41,7 @@ def main():
     lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=len(train_loader)//2, num_training_steps=epochs*len(train_loader))
 
     # train
-    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, r_scheduler=lr_scheduler)
+    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, lr_scheduler=lr_scheduler)
     
 
 if __name__ == "__main__":
