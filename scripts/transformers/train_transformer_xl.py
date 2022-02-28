@@ -6,11 +6,12 @@ from longcontext.utils.training import train
 
 
 def main():
-    epochs = 30
+    epochs = 50
     max_length = 64
     batch_size = 8
-    samples = 100*batch_size
+    samples = 200 * batch_size
     valid_samples = 4*batch_size
+    
 
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2")
@@ -23,7 +24,7 @@ def main():
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
         n_layer=12,
-        cutoffs=[2222, 4444, 22222],
+        cutoffs=[2222],
         return_dict=True,
         mem_len=1,
         eos_token_id=tokenizer.eos_token_id,
@@ -37,10 +38,10 @@ def main():
     # Set optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
 
-    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=5, num_training_steps=epochs*len(train_loader))
+    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=len(train_loader)//2, num_training_steps=epochs*len(train_loader))
 
     # train
-    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, lr_scheduler=lr_scheduler)
+    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, r_scheduler=lr_scheduler)
     
 
 if __name__ == "__main__":

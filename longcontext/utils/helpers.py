@@ -1,9 +1,8 @@
-import numpy as np
 import torch
-
+import numpy as np
 from transformers import OpenAIGPTLMHeadModel, TransfoXLLMHeadModel
 from transformers.models.transfo_xl.modeling_transfo_xl import TransfoXLLMHeadModelOutput
-
+from transformers.modeling_outputs import CausalLMOutput
 
 from ..transformers.outputs import (
     CompressiveTransformerLMHeadModelOutput,
@@ -11,8 +10,6 @@ from ..transformers.outputs import (
 )
 
 from ..transformers.compressive_transformer import CompressiveTransformerWithLMHead
-
-from transformers.modeling_outputs import CausalLMOutput
 
 from .config import (
     transformer_xl,

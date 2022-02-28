@@ -12,10 +12,10 @@ from transformers import (
 
 def main():
     epochs = 30
-    max_length = 32
-    batch_size = 10
-    samples = 1028
-    valid_samples = 128
+    max_length = 64
+    batch_size = 12
+    samples = None
+    valid_samples = 64
 
     # Get tokenizer
     tokenizer = OpenAIGPTTokenizer(
@@ -32,7 +32,7 @@ def main():
     config = OpenAIGPTConfig(
         vocab_size=tokenizer.vocab_size,
         n_positions=max_length,
-        n_layer=6
+        n_layer=12
     )
 
     model = OpenAIGPTLMHeadModel(config)
