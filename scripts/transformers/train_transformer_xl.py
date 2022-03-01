@@ -7,10 +7,10 @@ from longcontext.utils.training import train
 
 def main():
     epochs = 50
-    max_length = 64
-    batch_size = 8
+    max_length = 32
+    batch_size = 16
     samples = 200 * batch_size
-    valid_samples = 4*batch_size
+    valid_samples = 16*batch_size
     
 
     # Get tokenizer
@@ -24,9 +24,9 @@ def main():
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
         n_layer=12,
-        cutoffs=[2222],
+        cutoffs=[],
         return_dict=True,
-        mem_len=1,
+        mem_len=0,
         eos_token_id=tokenizer.eos_token_id,
     )
     model = TransfoXLLMHeadModel(config)

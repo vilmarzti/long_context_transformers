@@ -108,7 +108,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
                     if loss.dim() > 0:
                         loss = loss.mean()
 
-                    losses.append(loss.item())
+                    losses.append(loss.cpu().detach().item())
 
                     # compute perplexity
                     perplexities.extend(perplexity(model, input_ids, attention_mask, subsequence_len))
