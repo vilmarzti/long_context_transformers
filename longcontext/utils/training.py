@@ -42,7 +42,8 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
     for epoch in range(1, epochs + 1):
         model.train()
         average_loss_train =[]
-        for batch in tqdm(train_loader, desc=f"Training Epoch {epoch}"):
+        aggregate_loss = torch.FloatTensor(0).to(device)
+        for i, batch in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch}")):
             # Get the appropriate columns
             input_ids = batch["input_ids"]
 
@@ -65,16 +66,23 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             # Reduce loss if necessary
             if loss.dim() > 0:
                 loss = loss.mean()
-
-            # Backprop
-            loss.backward()
-            optimizer.step()
-
-            if lr_scheduler:
-                lr_scheduler.step()
             
-            # Reset optimizer
-            optimizer.zero_grad()
+            if i % 8 == 0:
+                aggregate_loss = loss
+            else:
+                aggregate_loss += loss
+
+            if i % 8 == 7:
+                # Backprop
+                aggregate_loss.backward()
+                optimizer.step()
+
+                if lr_scheduler:
+                    lr_scheduler.step()
+            
+                # Reset optimizer
+                optimizer.zero_grad()
+                del aggregate_loss
 
             average_loss_train.append(loss.cpu().detach().item())
         
@@ -122,7 +130,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
 
                
                 print(f"{epoch} in {epochs} done ")
-                print(f"avg_loss_train: {average_loss_train} avg_loss_test: {average_loss} avg_ppl: {average_ppl}")
+                print(f"avg_loss_train: {average_loss_train} avg_loss_test: {average_loss} avg_ppl: {average_ppl}\n")
 
                 if average_ppl > last_ppl:
                     model.save_pretrained(save_path)

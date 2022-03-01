@@ -9,7 +9,7 @@ def main():
     epochs = 50
     max_length = 32
     batch_size = 16
-    samples = 200 * batch_size
+    samples = 400 * batch_size
     valid_samples = 16*batch_size
     
 
@@ -23,8 +23,9 @@ def main():
     # Create Model
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
-        n_layer=12,
-        cutoffs=[],
+        n_layer=6,
+        n_heads=8,
+        cutoffs=[2222, 4444],
         return_dict=True,
         mem_len=0,
         eos_token_id=tokenizer.eos_token_id,
@@ -36,9 +37,9 @@ def main():
     model.to(device)
 
     # Set optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0001)
 
-    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=len(train_loader)//2, num_training_steps=epochs*len(train_loader))
+    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=len(train_loader)//8, num_training_steps=epochs*len(train_loader)//8)
 
     # train
     train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, lr_scheduler=lr_scheduler)
