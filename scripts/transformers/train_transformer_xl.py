@@ -8,9 +8,9 @@ from longcontext.utils.training import train
 def main():
     epochs = 50
     max_length = 32
-    batch_size = 16
+    batch_size = 8
     samples = 400 * batch_size
-    valid_samples = 16*batch_size
+    valid_samples =  40 * batch_size
     
 
     # Get tokenizer
@@ -23,11 +23,11 @@ def main():
     # Create Model
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
-        n_layer=6,
+        n_layer=12,
         n_heads=8,
-        cutoffs=[2222, 4444],
+        cutoffs=[2222, 4444, 22222],
         return_dict=True,
-        mem_len=0,
+        mem_len=1,
         eos_token_id=tokenizer.eos_token_id,
     )
     model = TransfoXLLMHeadModel(config)
@@ -42,7 +42,7 @@ def main():
     lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=len(train_loader)//8, num_training_steps=epochs*len(train_loader)//8)
 
     # train
-    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=32, lr_scheduler=lr_scheduler)
+    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=16, lr_scheduler=lr_scheduler)
     
 
 if __name__ == "__main__":

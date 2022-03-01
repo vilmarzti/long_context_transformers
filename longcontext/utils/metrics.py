@@ -58,7 +58,7 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
             else:
                 log_probabilities = np.log(softmax(prediction_scores[0], axis=-1))[-1]
 
-            token_prob = log_probabilities[token_head[0, -1]]
+            token_prob = log_probabilities[tokens[i]]
 
             sub_sequence_log_probs.append(token_prob.item())
 
