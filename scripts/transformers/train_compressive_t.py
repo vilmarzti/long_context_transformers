@@ -19,15 +19,18 @@ import yaml
 
 
 def main(main_config):
+    train_config = main_config["compressive_transformer"].pop("train")
+    loader_config = main_config["compressive_transformer"].pop("data_loader")
+
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained(main_config["transformer_xl_tokenizer"]["path"])
 
     # Get dataloaders for training
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, **main_config["data_loader"])
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, **loader_config)
 
     # Create Model
-    config = CompressiveTransformerConfig(vocab_size=tokenizer.vocab_size, **main_config["compressive_transformer"])
-    model = CompressiveTransformerWithLMHead(config)
+    model_config = CompressiveTransformerConfig(vocab_size=tokenizer.vocab_size, **main_config["compressive_transformer"])
+    model = CompressiveTransformerWithLMHead(model_config)
     
     # Put model onto GPU if available
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -37,16 +40,16 @@ def main(main_config):
     optimizer = torch.optim.AdamW(model.parameters(), lr=main_config["optimizer"]["learning_rate"])
 
     # Setup learning_rate scheduler
-    steps_per_epoch = len(train_loader) // main_config["train"]["aggregate"]
+    steps_per_epoch = len(train_loader) // train_config["aggregate"]
     lr_scheduler = get_scheduler(
         "linear",
         optimizer=optimizer,
         num_warmup_steps=steps_per_epoch,
-        num_training_steps=main_config["train"]["epochs"] * steps_per_epoch
+        num_training_steps=train_config["epochs"] * steps_per_epoch
     )
 
     # train
-    train(model, train_loader, optimizer, valid_loader=valid_loader, device=device, lr_scheduler=lr_scheduler, **main_config["train"])
+    train(model, train_loader, optimizer, valid_loader=valid_loader, device=device, lr_scheduler=lr_scheduler, **train_config)
 
 
 if __name__ == "__main__":

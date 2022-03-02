@@ -1,9 +1,25 @@
+data_loader: &data_loader
+  samples: 100
+  valid_samples: 16
+  batch_size: 8
+  max_length: 32
+
+optimizer: 
+  learning_rate: 0.0001
+
+train: &train
+  epochs: 1
+  subsequence_len: 32
+  aggregate: 4
+
 transformer_xl:
   n_layer: 2
   n_head: 8
   cutoffs: [2222, 4444, 22222]
   return_dict: True
   mem_len: 0
+  train: *train
+  data_loader: *data_loader
 
 transformer_xl_tokenizer:
   path: "data/tokenizer-xl-wiki2"
@@ -17,25 +33,15 @@ compressive_transformer:
   return_dict: True
   output_hidden_states: True
   cutoffs: [2222, 4444, 22222]
+  train: *train
+  data_loader: *data_loader
 
 gpt:
   n_layer: 2
+  train: *train
+  data_loader: *data_loader
 
 gpt_tokenizer:
   vocab_file: "data/tokenizer-gpt-wiki2/vocab.json"
   merges_file: "data/tokenizer-gpt-wiki2/merges.txt"
   unk_token: "<unk>"
-
-data_loader:
-  samples: 100
-  valid_samples: 16
-  batch_size: 8
-  max_length: 32
-
-optimizer: 
-  learning_rate: 0.0001
-
-train:
-  epochs: 1
-  subsequence_len: 32
-  aggregate: 4
