@@ -1,19 +1,20 @@
+import torch
 import unittest
+import yaml
 
 from transformers import (
-    AdamW,
-    LongformerConfig,
+    OpenAIGPTConfig,
+    OpenAIGPTLMHeadModel,
+    OpenAIGPTTokenizer,
     TransfoXLConfig,
     TransfoXLLMHeadModel,
-    TransfoXLTokenizer
+    TransfoXLTokenizer,
 )
 
 from longcontext.transformers.compressive_transformer import (
     CompressiveTransformerWithLMHead,
     CompressiveTransformerConfig
 )
-
-from longcontext.transformers.longformer import LongFormerLMHeadModel
 
 from longcontext.utils.dataset import get_dataloader
 from longcontext import train
@@ -23,68 +24,81 @@ class TrainingTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        # Get tokenizer
-        cls.tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2.json")
-
-        # Get Dataloaders processed by TransfoXLTokenizer
-        cls.train_loader, cls.valid_loader, _ = get_dataloader(cls.tokenizer, 4, 16, 32)
-    
+        # Get Config
+        with open("config/transformer_test.yaml", "r") as file:
+            cls.main_config = yaml.safe_load(file)
+        cls.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+   
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
-        del cls.tokenizer
-        del cls.train_loader
-        del cls.valid_loader
-
+        del cls.main_config
+        del cls.device
 
     def test_compressive_transformer(self):
-        # Create Model
-        config = CompressiveTransformerConfig(1, 10, vocab_size=self.tokenizer.vocab_size, n_layer=2, return_dict=True, output_hidden_states=True, cutoffs=[1000, 5000, 15000])
+        tokenizer = TransfoXLTokenizer.from_pretrained(self.main_config["transformer_xl_tokenizer"]["path"])
+
+        # Get dataloaders for training
+        train_loader, valid_loader, _ = get_dataloader(tokenizer, **self.main_config["data_loader"])
+
+        config = CompressiveTransformerConfig(vocab_size=tokenizer.vocab_size, **self.main_config["compressive_transformer"])
         model = CompressiveTransformerWithLMHead(config)
-        
-        # Set optimizer
-        optimizer = AdamW(model.parameters())
+        model = model.to(self.device)
+
+        # Setup optimizer
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.main_config["optimizer"]["learning_rate"])
 
         try:
             # train
-            train(model, self.train_loader, optimizer, 1, self.valid_loader, subsequence_len=8)
+            train(model, train_loader, optimizer, valid_loader=valid_loader, device=self.device, **self.main_config["train"])
         except:
             self.fail("Could not train Compressive Transformer for 1 epoch")
     
     def test_transformer_xl(self):
+        tokenizer = TransfoXLTokenizer.from_pretrained(self.main_config["transformer_xl_tokenizer"]["path"])
+
+        # Get dataloaders for training
+        train_loader, valid_loader, _ = get_dataloader(tokenizer, **self.main_config["data_loader"])
+
+        # Create Model
         config = TransfoXLConfig(
-            vocab_size=self.tokenizer.vocab_size,
-            n_layer=1,
-            cutoffs=[1000, 5000, 15000],
-            return_dict=True
+            vocab_size=tokenizer.vocab_size,
+            eos_token_id=tokenizer.eos_token_id,
+            **self.main_config["transformer_xl"]
         )
         model = TransfoXLLMHeadModel(config)
+        model = model.to(self.device)
 
-        # Set optimizer
-        optimizer = AdamW(model.parameters())
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.main_config["optimizer"]["learning_rate"])
 
         try:
-            train(model, self.train_loader, optimizer, 1, self.valid_loader, subsequence_len=8)
+            train(model, train_loader, optimizer, valid_loader=valid_loader, device=self.device, **self.main_config["train"])
         except:
             self.fail("Could not train Transformer-XL for 1 epoch")
     
-    @unittest.SkipTest
-    def test_longformer(self):
-        # Create model
-        config = LongformerConfig(
-            vocab_size=self.tokenizer.vocab_size,
-            attention_window=64,
-            max_position_embeddings=219,
-            num_hidden_layers=6
-        )
-        model = LongFormerLMHeadModel(config)
+    def test_gpt(self):
+        # Get tokenizer
+        tokenizer = OpenAIGPTTokenizer(**self.main_config["gpt_tokenizer"])
+        tokenizer.model_max_length = self.main_config["data_loader"]["max_length"]
 
-        optimizer = AdamW(model.parameters())
-        
+        # Get Dataloaders processed by TransfoXLTokenizer
+        train_loader, valid_loader, _ = get_dataloader(tokenizer, **self.main_config["data_loader"])
+
+        config = OpenAIGPTConfig(
+            vocab_size=tokenizer.vocab_size,
+            n_positions=self.main_config["data_loader"]["max_length"],
+            **self.main_config["gpt"]
+        )
+
+        model = OpenAIGPTLMHeadModel(config)
+        model = model.to(self.device)
+
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.main_config["optimizer"]["learning_rate"])
         try:
-            train(model, self.train_loader, optimizer, 1, self.valid_loader) 
+            train(model, train_loader, optimizer, valid_loader=valid_loader, device=self.device, **self.main_config["train"])
         except:
-            self.fail("Could not train long-former for 1 epoch")
+            self.fail("Could not train OpenAIGPTLMHead model")
+    
 
 if __name__ == "__main__":
     unittest.main()

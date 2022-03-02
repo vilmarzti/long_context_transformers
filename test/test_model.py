@@ -2,6 +2,8 @@ import unittest
 
 from transformers import (
     LongformerConfig,
+    OpenAIGPTConfig,
+    OpenAIGPTLMHeadModel,
     TransfoXLConfig,
     TransfoXLLMHeadModel
 )
@@ -10,6 +12,7 @@ from longcontext.transformers.compressive_transformer import (
     CompressiveTransformerWithLMHead,
     CompressiveTransformerConfig
 )
+
 from longcontext.transformers.longformer import LongFormerLMHeadModel
 
 
@@ -35,6 +38,13 @@ class CreationTestCase(unittest.TestCase):
             model = LongFormerLMHeadModel(config)
         except:
             self.fail("LongFormer could not be instantiated")
+    
+    def test_create_gpt(self):
+        try:
+            config = OpenAIGPTConfig()
+            model = OpenAIGPTLMHeadModel(config)
+        except:
+            self.fail("GPT could not be instantiated")
 
 
 if __name__ == "__main__":
