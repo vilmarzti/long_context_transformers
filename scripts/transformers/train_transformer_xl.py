@@ -1,34 +1,28 @@
+import os
+from pydantic import PathError
 import torch
 
 from transformers import get_scheduler, TransfoXLConfig, TransfoXLLMHeadModel, TransfoXLTokenizer
 from longcontext.utils.dataset import get_dataloader
 from longcontext.utils.training import train
 
+import argparse
+import yaml
 
-def main():
-    epochs = 50
-    max_length = 32
-    batch_size = 8
-    samples = 400 * batch_size
-    valid_samples =  40 * batch_size
-    
 
+def main(main_config):
     # Get tokenizer
     tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2")
-    tokenizer.model_max_length = max_length
+    tokenizer.model_max_length = main_config["data_loader"]["max_length"]
 
     # Get Dataloaders processed by TransfoXLTokenizer
-    train_loader, valid_loader, _ = get_dataloader(tokenizer, samples=samples, batch_size=batch_size, max_length=max_length, valid_samples=valid_samples)
+    train_loader, valid_loader, _ = get_dataloader(tokenizer, **main_config["data_loader"])
 
     # Create Model
     config = TransfoXLConfig(
         vocab_size=tokenizer.vocab_size,
-        n_layer=12,
-        n_heads=8,
-        cutoffs=[2222, 4444, 22222],
-        return_dict=True,
-        mem_len=1,
         eos_token_id=tokenizer.eos_token_id,
+        **main_config["transformer_xl"]
     )
     model = TransfoXLLMHeadModel(config)
 
@@ -37,13 +31,31 @@ def main():
     model.to(device)
 
     # Set optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=main_config["optimizer"]["learning_rate"])
 
-    lr_scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=len(train_loader)//8, num_training_steps=epochs*len(train_loader)//8)
+    # Setup learning_rate scheduler
+    steps_per_epoch = len(train_loader) // main_config["train"]["aggregate"]
+    lr_scheduler = get_scheduler(
+        "linear",
+        optimizer=optimizer,
+        num_warmup_steps=steps_per_epoch,
+        num_training_steps=main_config["train"]["epochs"] * steps_per_epoch
+    )
 
     # train
-    train(model, train_loader, optimizer, epochs, valid_loader, device=device, subsequence_len=16, lr_scheduler=lr_scheduler)
+    train(model, train_loader, optimizer, valid_loader=valid_loader, device=device, lr_scheduler=lr_scheduler, **main_config["train"])
     
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser("Transformer-XL training routine")
+    parser.add_argument("-c", "--config", required=True, type=str, help="Path to the YAML-config for training. Should be found in the \"config/\"-folder")
+    args = parser.parse_args()
+
+    config = {}
+    if os.path.isfile(args.config):
+        with open(args.config, "r") as file:
+            config = yaml.safe_load(file)
+    else:
+        raise PathError("The path to the config file is invalid.")
+
+    main(config)

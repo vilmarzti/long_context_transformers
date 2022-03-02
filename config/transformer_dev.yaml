@@ -1,0 +1,20 @@
+transformer_xl:
+  n_layer: 6
+  n_head: 8
+  cutoffs: [2222, 4444, 22222]
+  return_dict: True
+  mem_len: 0
+
+data_loader:
+  samples: 
+  valid_samples: 640
+  batch_size: 8
+  max_length: 32
+
+optimizer: 
+  learning_rate: 0.0001
+
+train:
+  epochs: 50
+  subsequence_len: 32
+  aggregate: 4

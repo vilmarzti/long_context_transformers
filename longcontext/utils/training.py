@@ -14,7 +14,7 @@ from longcontext.utils.helpers import forward_pass, get_attribute
 from longcontext.utils.metrics import perplexity
 
 
-def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_scheduler=None, device="cpu", subsequence_len=-1, save_path=None):
+def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_scheduler=None, device="cpu", subsequence_len=-1, save_path=None, aggregate=1):
     """ The training loop with validation.
 
     Args:
@@ -22,7 +22,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             return an object with and element 'loss'.
         train_loader (torch.utils.data.Dataloader): A generator for the data
         optimizer (object): The optimizer for the transformer
-        epochs (integer): How many epochs to train
+        epochs (integer): How many epochs to train. Defaults to 30.
         valid_loader (torch.utils.data.Dataloader, optional): Optional generator
             for the validation data. If None is provided then no validation is 
             performed. Defaults to None.
@@ -32,6 +32,7 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             Defaults to "cpu"
         subsequence_len (int, optional): The length of the subsequences for 
             Transformer-XL and Compressive Transformer.
+        aggregate: (int, optional): The number of batches we aggregate over. Defaults to 1
     """
     if save_path is None:
         save_path = path.join("data", "transformers", "_".join([datetime.now().strftime("%Y_%m_%d_%H"), type(model).__name__]))
@@ -67,12 +68,12 @@ def train(model, train_loader, optimizer, epochs, valid_loader=None, lr_schedule
             if loss.dim() > 0:
                 loss = loss.mean()
             
-            if i % 8 == 0:
+            if i % aggregate == 0:
                 aggregate_loss = loss
             else:
                 aggregate_loss += loss
 
-            if i % 8 == 7:
+            if i % aggregate == aggregate - 1:
                 # Backprop
                 aggregate_loss.backward()
                 optimizer.step()
