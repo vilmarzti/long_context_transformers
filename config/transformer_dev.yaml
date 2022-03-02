@@ -5,6 +5,19 @@ transformer_xl:
   return_dict: True
   mem_len: 0
 
+transformer_xl_tokenizer:
+  path: "data/tokenizer-xl-wiki2"
+
+compressive_transformer:
+  n_layer: 4
+  n_head: 8
+  compression_rate: 4
+  c_mem_length: 4
+  mem_len: 1
+  return_dict: True
+  output_hidden_states: True
+  cutoffs: [2222, 4444, 22222]
+
 data_loader:
   samples: 
   valid_samples: 640

@@ -1,5 +1,4 @@
 import os
-from pydantic import PathError
 import torch
 
 from transformers import get_scheduler, TransfoXLConfig, TransfoXLLMHeadModel, TransfoXLTokenizer
@@ -12,7 +11,7 @@ import yaml
 
 def main(main_config):
     # Get tokenizer
-    tokenizer = TransfoXLTokenizer.from_pretrained("data/tokenizer-xl-wiki2")
+    tokenizer = TransfoXLTokenizer.from_pretrained(main_config["transformer_xl_tokenizer"]["path"])
     tokenizer.model_max_length = main_config["data_loader"]["max_length"]
 
     # Get Dataloaders processed by TransfoXLTokenizer
@@ -56,6 +55,6 @@ if __name__ == "__main__":
         with open(args.config, "r") as file:
             config = yaml.safe_load(file)
     else:
-        raise PathError("The path to the config file is invalid.")
+        raise ValueError("The path to the config file is invalid.")
 
     main(config)
