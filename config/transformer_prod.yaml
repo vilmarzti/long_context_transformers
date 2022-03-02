@@ -19,8 +19,10 @@ transformer_xl:
   cutoffs: [2222, 4444, 22222]
   return_dict: True
   mem_len: 0
-  train: *train
-  data_loader: *data_loader
+  train: 
+    <<: *train
+  data_loader: 
+    <<: *data_loader
 
 transformer_xl_tokenizer:
   path: "data/tokenizer-xl-wiki2"
@@ -34,13 +36,17 @@ compressive_transformer:
   return_dict: True
   output_hidden_states: True
   cutoffs: [2222, 4444, 22222]
-  train: *train
-  data_loader: *data_loader
+  train: 
+    <<: *train
+  data_loader: 
+    <<: *data_loader
 
 gpt:
   n_layer: 12
-  train: *train
-  data_loader: *data_loader
+  train: 
+    <<: *train
+  data_loader: 
+    <<: *data_loader
 
 gpt_tokenizer:
   vocab_file: "data/tokenizer-gpt-wiki2/vocab.json"
