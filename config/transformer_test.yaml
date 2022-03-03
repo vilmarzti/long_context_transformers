@@ -51,3 +51,4 @@ gpt_tokenizer:
   vocab_file: "data/tokenizer-gpt-wiki2/vocab.json"
   merges_file: "data/tokenizer-gpt-wiki2/merges.txt"
   unk_token: "<unk>"
+  pad_token: "<pad>"
