@@ -46,7 +46,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
         model.train()
         average_loss_train =[]
         aggregate_loss = torch.FloatTensor(0).to(device)
-        for i, batch in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch}", leave=False)):
+        for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} - Training", leave=False)):
             # Get the appropriate columns
             input_ids = batch["input_ids"]
 
@@ -98,7 +98,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                 # Go through 
                 losses = []
                 perplexities = []
-                for batch in tqdm(valid_loader, desc=f"Validation epoch {epoch}", leave=False):
+                for batch in tqdm(valid_loader, desc=f"Epoch {epoch} - Validation", leave=False):
                     # Get the appropriate columns
                     input_ids = batch["input_ids"]
 
@@ -132,7 +132,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                 writer.add_scalar("Perplexity/test", average_ppl, epoch)
 
                
-                print(f"Epoch {epoch:<4n} in {epochs:<4n}: \navg_loss_train: {average_loss_train:<8.4n} avg_loss_test: {average_loss:<8.4n} avg_ppl: {average_ppl:<8.4n}")
+                print(f"Epoch {epoch:<4n} in {epochs:<4n}: avg_loss_train: {average_loss_train:<8.4n} avg_loss_test: {average_loss:<8.4n} avg_ppl: {average_ppl:<8.4n}")
 
                 if average_ppl > last_ppl:
                     model.save_pretrained(save_path)
