@@ -7,7 +7,7 @@ from datasets import load_dataset
 import datasets
 
 
-def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None):
+def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None, padding=True):
     """Creates DataLoaders from wikitext2 encoded with a tokenizer
 
     Args:
@@ -32,10 +32,19 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
 
     # Tokenize Dataset
     tokenized_dataset = dataset.map(
-        lambda samples : {"input_ids": tokenizer(samples["text"], max_length=max_length, truncation=True)["input_ids"]},
+        lambda samples: tokenizer(samples["text"], max_length=max_length, truncation=True, padding=padding, return_attention_mask=True),
         batched=True
     )
     tokenized_dataset = tokenized_dataset.filter(lambda sample: len(sample["input_ids"]) == max_length)
+
+    # Set pad_token id to -100 such that it get's ignored when computing the cross-entropy
+    tokenized_dataset = tokenized_dataset.map(
+        lambda sample: {
+            "input_ids": [input_id if input_id != tokenizer.pad_token_id else -100 for input_id in sample["input_ids"]],
+            **{i:sample[i] for i in sample if i!="input_ids"}
+        }
+    )
+
     tokenized_dataset.set_format("torch")
 
     # Remove text and type_ids

@@ -45,7 +45,6 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
     for epoch in range(1, epochs + 1):
         model.train()
         average_loss_train =[]
-        aggregate_loss = torch.FloatTensor(0).to(device)
         for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} - Training", leave=False)):
             # Get the appropriate columns
             input_ids = batch["input_ids"]
@@ -68,12 +67,15 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
 
             # Reduce loss if necessary
             if loss.dim() > 0:
-                loss = loss.mean()
+                loss = loss[loss != 0.0].mean()
             
             if i % aggregate == 0:
                 aggregate_loss = loss
             else:
                 aggregate_loss += loss
+
+            average_loss_train.append(loss.cpu().detach().item())
+            del loss
 
             if i % aggregate == aggregate - 1:
                 # Backprop
@@ -87,7 +89,6 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                 optimizer.zero_grad()
                 del aggregate_loss
 
-            average_loss_train.append(loss.cpu().detach().item())
         
         average_loss_train = np.mean(average_loss_train)
 
@@ -117,7 +118,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                     loss = get_attribute(outputs, "loss")
 
                     if loss.dim() > 0:
-                        loss = loss.mean()
+                        loss = loss[loss != 0].mean()
 
                     losses.append(loss.cpu().detach().item())
 
