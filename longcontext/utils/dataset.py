@@ -29,12 +29,16 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
     # Load Dataset
     dataset = load_dataset("wikitext", name="wikitext-2-v1")
 
+    # Exclude empty text samples
+    dataset = dataset.filter(lambda sample: len(sample["text"]) > 0)
 
     # Tokenize Dataset
     tokenized_dataset = dataset.map(
         lambda samples: tokenizer(samples["text"], max_length=max_length, truncation=True, padding=padding, return_attention_mask=True),
         batched=True
     )
+
+    # Filter for equal length if no padding is provided
     tokenized_dataset = tokenized_dataset.filter(lambda sample: len(sample["input_ids"]) == max_length)
 
     # Set pad_token id to -100 such that it get's ignored when computing the cross-entropy
