@@ -77,7 +77,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
             average_loss_train.append(loss.cpu().detach().item())
             del loss
 
-            if i % aggregate == aggregate - 1:
+            if i % aggregate == aggregate - 1 or i + 1 == len(train_loader):
                 # Backprop
                 aggregate_loss.backward()
                 optimizer.step()
