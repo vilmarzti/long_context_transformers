@@ -29,6 +29,7 @@ transformer_xl:
     max_length: 64
     samples:
     valid_samples: 128
+    replace_pad: True
 
 transformer_xl_tokenizer:
   pretrained_model_name_or_path: "data/tokenizer-xl-wiki2"
@@ -47,9 +48,11 @@ compressive_transformer:
     <<: *train
   data_loader: 
     <<: *data_loader
+    replace_pad: True
 
 gpt:
   n_layer: 12
+  pad_token: "<pad>"
   train: 
     <<: *train
   data_loader: 

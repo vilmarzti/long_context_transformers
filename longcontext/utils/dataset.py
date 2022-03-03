@@ -2,12 +2,13 @@
     This module provides all the files that deal with the dataset,
     such as loading or preparing.
 """
+from dataclasses import replace
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 import datasets
 
 
-def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None, padding=True):
+def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None, padding=True, replace_pad=False):
     """Creates DataLoaders from wikitext2 encoded with a tokenizer
 
     Args:
@@ -18,6 +19,16 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
         samples (int, optional): How many samples from the original 
             dataset to take. If None are provided then it takes all samples.
             Defaults to None.
+        max_length (int, optional): The length the input_ids should have.
+            Defaults to 256
+        valid_samples (int, optional): How many validation samples we have.
+            If None all the validation samples are considered. Defaults
+            to None
+        padding (bool, optional): Whether we pad all the sequences below
+            max_length to max_length or discred them. Defaults to True
+        replace_bad (bool, optional): Whether we replace the padding token ids
+            with -100. This is useful when computing the Cross-Entropy-loss as
+            these tokens won't be considered
 
     Returns:
         tuple[DataLoader]: Dataloaders containing train, validation
@@ -42,12 +53,13 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
     # Filter for equal length if no padding is provided
     tokenized_dataset = tokenized_dataset.filter(lambda sample: len(sample["input_ids"]) == max_length)
 
-    # Set pad_token id to -100 such that it get's ignored when computing the cross-entropy
-    tokenized_dataset = tokenized_dataset.map(
-        lambda sample: {
-            "input_ids": [input_id if input_id != tokenizer.pad_token_id else -100 for input_id in sample["input_ids"]],
-            **{i:sample[i] for i in sample if i!="input_ids"}
-        }
+    if replace_pad:
+        # Set pad_token id to -100 such that it get's ignored when computing the cross-entropy
+        tokenized_dataset = tokenized_dataset.map(
+            lambda sample: {
+                "input_ids": [input_id if input_id != tokenizer.pad_token_id else -100 for input_id in sample["input_ids"]],
+                **{i:sample[i] for i in sample if i!="input_ids"}
+            }
     )
 
     # Change to tensors

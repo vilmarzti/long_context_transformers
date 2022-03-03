@@ -33,7 +33,8 @@ def main(main_config):
 
     model = OpenAIGPTLMHeadModel(model_config)
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    #device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = "cpu"
     model.to(device)
 
     # Set optimizer
