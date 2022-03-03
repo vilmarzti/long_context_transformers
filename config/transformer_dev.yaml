@@ -13,19 +13,25 @@ optimizer:
   learning_rate: 0.0001
 
 transformer_xl:
-  n_layer: 12
+  n_layer: 8
   n_head: 8
   n_embed: 768
+  d_inner: 3072 
+  d_head: 218
   cutoffs: [2222, 4444, 22222]
   return_dict: True
-  mem_len: 0
+  mem_len: 1
   train: 
     <<: *train
+    subsequence_len: 32
   data_loader:
     <<: *data_loader
+    max_length: 64
+    samples: 
 
 transformer_xl_tokenizer:
-  path: "data/tokenizer-xl-wiki2"
+  pretrained_model_name_or_path: "data/tokenizer-xl-wiki2"
+  verbose: False
 
 compressive_transformer:
   n_layer: 4

@@ -4,6 +4,7 @@
 """
 from torch.utils.data import DataLoader
 from datasets import load_dataset
+import datasets
 
 
 def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None):
@@ -21,6 +22,10 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
         tuple[DataLoader]: Dataloaders containing train, validation
             and test set.
     """
+
+    # Remove Verbose
+    datasets.logging.set_verbosity_error()
+
     # Load Dataset
     dataset = load_dataset("wikitext", name="wikitext-2-v1")
 

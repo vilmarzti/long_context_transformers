@@ -14,7 +14,7 @@ def main(main_config):
     loader_config = main_config["transformer_xl"].pop("data_loader")
 
     # Get tokenizer
-    tokenizer = TransfoXLTokenizer.from_pretrained(main_config["transformer_xl_tokenizer"]["path"])
+    tokenizer = TransfoXLTokenizer.from_pretrained(**main_config["transformer_xl_tokenizer"])
     tokenizer.model_max_length = loader_config["max_length"]
 
     # Get Dataloaders processed by TransfoXLTokenizer

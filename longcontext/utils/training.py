@@ -34,17 +34,19 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
             Transformer-XL and Compressive Transformer.
         aggregate: (int, optional): The number of batches we aggregate over. Defaults to 1
     """
+   
+    print(f"\nStarting training of model {type(model).__name__} with {sum(p.numel() for p in model.parameters() if p.requires_grad):,} parameters\n")
+
     if save_path is None:
         save_path = path.join("data", "transformers", "_".join([datetime.now().strftime("%Y_%m_%d_%H"), type(model).__name__]))
-
-
+ 
     writer = SummaryWriter()
     last_ppl = float("-inf")
     for epoch in range(1, epochs + 1):
         model.train()
         average_loss_train =[]
         aggregate_loss = torch.FloatTensor(0).to(device)
-        for i, batch in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch}")):
+        for i, batch in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch}", leave=False)):
             # Get the appropriate columns
             input_ids = batch["input_ids"]
 
@@ -96,7 +98,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                 # Go through 
                 losses = []
                 perplexities = []
-                for batch in tqdm(valid_loader, desc=f"Validation epoch {epoch}"):
+                for batch in tqdm(valid_loader, desc=f"Validation epoch {epoch}", leave=False):
                     # Get the appropriate columns
                     input_ids = batch["input_ids"]
 
@@ -130,8 +132,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                 writer.add_scalar("Perplexity/test", average_ppl, epoch)
 
                
-                print(f"{epoch} in {epochs} done ")
-                print(f"avg_loss_train: {average_loss_train} avg_loss_test: {average_loss} avg_ppl: {average_ppl}\n")
+                print(f"Epoch {epoch:<4n} in {epochs:<4n}: \navg_loss_train: {average_loss_train:<8.4n} avg_loss_test: {average_loss:<8.4n} avg_ppl: {average_ppl:<8.4n}")
 
                 if average_ppl > last_ppl:
                     model.save_pretrained(save_path)
