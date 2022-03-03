@@ -50,6 +50,7 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
         }
     )
 
+    # Change to tensors
     tokenized_dataset.set_format("torch")
 
     # Remove text and type_ids
