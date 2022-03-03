@@ -39,7 +39,7 @@ class TrainingTestCase(unittest.TestCase):
         train_config = self.main_config["compressive_transformer"].pop("train")
         loader_config = self.main_config["compressive_transformer"].pop("data_loader")
 
-        tokenizer = TransfoXLTokenizer.from_pretrained(self.main_config["transformer_xl_tokenizer"]["path"])
+        tokenizer = TransfoXLTokenizer.from_pretrained(**self.main_config["transformer_xl_tokenizer"])
 
         # Get dataloaders for training
         train_loader, valid_loader, _ = get_dataloader(tokenizer, **loader_config)
@@ -61,7 +61,7 @@ class TrainingTestCase(unittest.TestCase):
         train_config = self.main_config["transformer_xl"].pop("train")
         loader_config = self.main_config["transformer_xl"].pop("data_loader")
 
-        tokenizer = TransfoXLTokenizer.from_pretrained(self.main_config["transformer_xl_tokenizer"]["path"])
+        tokenizer = TransfoXLTokenizer.from_pretrained(**self.main_config["transformer_xl_tokenizer"])
         tokenizer.model_max_length = loader_config["max_length"]
 
         # Get dataloaders for training

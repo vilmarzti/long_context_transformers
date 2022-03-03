@@ -5,6 +5,7 @@ def main():
 
     tokenizer = TransfoXLTokenizer(
         delimiter=" ",
+        pad_token="<pad>"
     )
 
     for split in ["test", "train", "valid"]:

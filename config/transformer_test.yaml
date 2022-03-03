@@ -22,9 +22,11 @@ transformer_xl:
     <<: *train
   data_loader: 
     <<: *data_loader
+    replace_pad: True
 
 transformer_xl_tokenizer:
-  path: "data/tokenizer-xl-wiki2"
+  pretrained_model_name_or_path: "data/tokenizer-xl-wiki2"
+  verbose: False
 
 compressive_transformer:
   n_layer: 2
@@ -39,6 +41,7 @@ compressive_transformer:
     <<: *train
   data_loader: 
     <<: *data_loader
+    replace_pad: True
 
 gpt:
   n_layer: 2
@@ -51,3 +54,5 @@ gpt_tokenizer:
   vocab_file: "data/tokenizer-gpt-wiki2/vocab.json"
   merges_file: "data/tokenizer-gpt-wiki2/merges.txt"
   unk_token: "<unk>"
+  pad_token: "<pad>"
+  verbose: False

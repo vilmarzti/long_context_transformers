@@ -14,7 +14,7 @@ def main():
 
 if __name__ == "__main__":
     tokenizer = Tokenizer(BPE(unk_token="<unk>"))
-    trainer = BpeTrainer(special_tokens=["<unk>"])
+    trainer = BpeTrainer(special_tokens=["<unk>", "<pad>"])
 
     tokenizer.pre_tokenizer = Whitespace()
 

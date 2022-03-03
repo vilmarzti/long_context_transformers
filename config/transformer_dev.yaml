@@ -20,14 +20,16 @@ transformer_xl:
   d_head: 218
   cutoffs: [2222, 4444, 22222]
   return_dict: True
-  mem_len: 1
+  mem_len: 3
   train: 
     <<: *train
-    subsequence_len: 32
+    subsequence_len: 16
   data_loader:
     <<: *data_loader
     max_length: 64
-    samples: 
+    samples:
+    valid_samples: 128
+    replace_pad: True
 
 transformer_xl_tokenizer:
   pretrained_model_name_or_path: "data/tokenizer-xl-wiki2"
@@ -46,9 +48,11 @@ compressive_transformer:
     <<: *train
   data_loader: 
     <<: *data_loader
+    replace_pad: True
 
 gpt:
   n_layer: 12
+  pad_token: "<pad>"
   train: 
     <<: *train
   data_loader: 
@@ -58,3 +62,4 @@ gpt_tokenizer:
   vocab_file: "data/tokenizer-gpt-wiki2/vocab.json"
   merges_file: "data/tokenizer-gpt-wiki2/merges.txt"
   unk_token: "<unk>"
+  pad_token: "<pad>"
