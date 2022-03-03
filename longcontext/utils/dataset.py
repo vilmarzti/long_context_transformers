@@ -16,7 +16,8 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
         batch_size (int, optional): The batch size of the DataLoader. 
             Defaults to 8.
         samples (int, optional): How many samples from the original 
-            dataset to take. Defaults to 1000.
+            dataset to take. If None are provided then it takes all samples.
+            Defaults to None.
 
     Returns:
         tuple[DataLoader]: Dataloaders containing train, validation
