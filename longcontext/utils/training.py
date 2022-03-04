@@ -125,7 +125,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                     # compute perplexity
                     perplexities.extend(perplexity(model, input_ids, attention_mask, subsequence_len))
 
-                average_ppl = np.mean(perplexities, dtype=np.longdouble)
+                average_ppl = np.mean(perplexities)
                 average_loss = np.mean(losses)
 
                 writer.add_scalars("Loss", {"valid": average_loss}, epoch)
