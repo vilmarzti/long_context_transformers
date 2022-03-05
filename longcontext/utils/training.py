@@ -99,7 +99,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
         if valid_loader:
             with torch.no_grad():
                 # Go through all batches
-                losses = []
+                losses = np.array([])
                 for i, batch in enumerate(tqdm(valid_loader, desc=f"Epoch {epoch} - Validation", leave=False)):
                     # Get the appropriate columns
                     input_ids = batch["input_ids"]
@@ -125,20 +125,20 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                         loss = loss[loss != 0].mean()
 
                     # Save losses
-                    losses.append(loss.cpu().detach().item())
+                    losses = np.append(losses, loss.cpu().detach().item())
 
                     # Save perplexity
                     if i == 0:
                         perplexities = perplexity(model, input_ids, attention_mask, subsequence_len)[None]
                     else:
-                        perplexities = np.append(
+                        perplexities = np.ma.append(
                             perplexities,
                             perplexity(model, input_ids, attention_mask, subsequence_len)[None],
                             axis=0
                         )
 
-                average_ppl = np.mean(perplexities)
-                average_loss = np.mean(losses)
+                average_ppl = perplexities.mean()
+                average_loss = losses.mean()
 
                 writer.add_scalars("Loss", {"valid": average_loss}, epoch)
                 writer.add_scalars("Loss", {"train": average_loss_train}, epoch)

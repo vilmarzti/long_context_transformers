@@ -37,9 +37,6 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
 
     # Generate probabilities for subsequence of sentence
     for i in range(1, input_ids.size(1)):
-        token_head = input_ids_numpy[:, :i]
-        mask_head = attention_mask[:, :i]
-
         # Forwards pass
         outputs = forward_pass(
             model,
@@ -58,8 +55,12 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
         else:
             log_probabilities = np.log(softmax(prediction_scores, axis=-1))[:, -1]
 
-        # Get prdicted token log probabilities
-        token_log_prob = np.array([log_probabilities[i, id] for i, id in enumerate(input_ids_numpy[:, i])])
+        # Get predicted token log probabilities
+        mask = np.zeros_like(log_probabilities)
+        for idx, id in enumerate(input_ids[:, i]):
+            mask[idx, id] = 1
+        
+        token_log_prob = log_probabilities[mask == 1]
 
         # Append to sequence
         if i == 1:
@@ -68,15 +69,15 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
             sequence_log_probs = np.append(sequence_log_probs, token_log_prob[:, None], axis=1)
 
     # Mask log_probabilities
-    sequence_log_probs = ma.array(sequence_log_probs, mask=(attention_mask[:, 1:] == 0).cpu().numpy())
+    sequence_log_probs = ma.array(sequence_log_probs, mask=(attention_mask[:, 1:] == 0).cpu().numpy(), fill_value=0)
 
     # Compute lengths of each batch
-    sequence_lengths = np.count_nonzero(sequence_log_probs.mask == 0, axis=1)
+    sequence_lengths = sequence_log_probs.count(axis=1) + 1
 
-    sum_log_probs = ma.sum(sequence_log_probs, axis=1).compressed()
+    sum_log_probs = sequence_log_probs.sum(axis=1) 
 
     # Compute perplexity.
-    perplexity = np.exp((-1.0 / sequence_lengths) * sum_log_probs)
+    perplexity = ma.exp(-sum_log_probs/ sequence_lengths)
 
     return perplexity
 
