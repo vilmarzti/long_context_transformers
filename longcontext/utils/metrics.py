@@ -56,7 +56,7 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
         if isinstance(model, TransfoXLLMHeadModel):
             log_probabilities = prediction_scores[:, -1]
         else:
-            log_probabilities = np.log(softmax(prediction_scores[0], axis=-1))[-1]
+            log_probabilities = np.log(softmax(prediction_scores, axis=-1))[:, -1]
 
         # Get prdicted token log probabilities
         token_log_prob = np.array([log_probabilities[i, id] for i, id in enumerate(input_ids_numpy[:, i])])
