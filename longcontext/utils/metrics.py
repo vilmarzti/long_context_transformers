@@ -32,31 +32,40 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
     """
 
     # Compute Perplexity for a sentence
-    perplexities = []
     sequence_log_probs = []
+    input_ids_numpy = input_ids.cpu().numpy()
 
     # Generate probabilities for subsequence of sentence
     for i in range(1, input_ids.size(1)):
-        token_head = input_ids[:, :i]
+        token_head = input_ids_numpy[:, :i]
         mask_head = attention_mask[:, :i]
 
-        outputs = forward_pass(model, token_head, mask_head, subsequence_len, use_labels=False)
+        # Forwards pass
+        outputs = forward_pass(
+            model,
+            input_ids[:, :i],
+            attention_mask[:, :i],
+            subsequence_len,
+            use_labels=False
+        )
 
         # Get probability for the chosen last word
         prediction_scores = get_attribute(outputs, "prediction_scores")
 
         # Get log probabilities. Tranformer-XL outputs them directly
         if isinstance(model, TransfoXLLMHeadModel):
-            log_probabilities = prediction_scores[0, -1]
+            log_probabilities = prediction_scores[:, -1]
         else:
             log_probabilities = np.log(softmax(prediction_scores[0], axis=-1))[-1]
 
-        token_prob = log_probabilities[input_ids[:, i], None]
+        # Get prdicted token log probabilities
+        token_log_prob = np.array([log_probabilities[i, id] for i, id in enumerate(input_ids_numpy[:, i])])
 
+        # Append to sequence
         if i == 1:
-            sequence_log_probs = token_prob
+            sequence_log_probs = token_log_prob[:, None]
         else:
-            sequence_log_probs = np.append(sequence_log_probs, token_prob, axis=1)
+            sequence_log_probs = np.append(sequence_log_probs, token_log_prob[:, None], axis=1)
 
     # Mask log_probabilities
     sequence_log_probs = ma.array(sequence_log_probs, mask=(attention_mask[:, 1:] == 0).cpu().numpy())
