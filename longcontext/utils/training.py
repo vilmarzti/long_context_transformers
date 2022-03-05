@@ -89,6 +89,8 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                 optimizer.zero_grad()
                 del aggregate_loss
 
+            # Clear GPU cache
+            torch.cuda.empty_cache()
         
         average_loss_train = np.mean(average_loss_train)
 
