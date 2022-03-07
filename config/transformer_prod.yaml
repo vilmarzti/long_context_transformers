@@ -14,18 +14,18 @@ optimizer:
 
 transformer_xl:
   n_layer: 12
-  n_head: 8
-  n_embed: 768
-  d_inner: 3072 
-  d_head: 768
+  n_head: 12
+  d_inner: 1024
+  d_head: 128
   cutoffs: [2222, 4444, 22222]
   return_dict: True
-  mem_len: 3
+  mem_len: 7
   train: 
     <<: *train
-    subsequence_len: 128
+    subsequence_len: 32
   data_loader:
     <<: *data_loader
+    max_length: 218
     replace_pad: True
 
 transformer_xl_tokenizer:
