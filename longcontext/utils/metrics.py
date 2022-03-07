@@ -1,6 +1,8 @@
 import torch
 
 import numpy as np
+import numpy.ma as ma
+
 from scipy.special import softmax
 from transformers import TransfoXLLMHeadModel
 
@@ -29,48 +31,53 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
             sequences are just padding. These sequences will return no perplexity
     """
 
-    # Make list of sequences
-    sentence_token = torch.unbind(input_ids)
-    sentence_mask = torch.unbind(attention_mask)
-    
     # Compute Perplexity for a sentence
-    perplexities = []
-    for tokens, attn in zip(sentence_token, sentence_mask):
-        sub_sequence_log_probs = []
+    sequence_log_probs = []
+    input_ids_numpy = input_ids.cpu().numpy()
 
-        # Generate probabilities for subsequence of sentence
-        for i in range(2, tokens.size(0)):
-            # don't generate padding
-            if attn[i] == 0.0:
-                break
+    # Generate probabilities for subsequence of sentence
+    for i in range(1, input_ids.size(1)):
+        # Forwards pass
+        outputs = forward_pass(
+            model,
+            input_ids[:, :i],
+            attention_mask[:, :i],
+            subsequence_len,
+            use_labels=False
+        )
 
-            token_head = tokens[:i].unsqueeze(dim=0)
-            mask_head = attn[:i].unsqueeze(dim=0)
+        # Get probability for the chosen last word
+        prediction_scores = get_attribute(outputs, "prediction_scores")
 
-            outputs = forward_pass(model, token_head, mask_head, subsequence_len, use_labels=False)
+        # Get log probabilities. Tranformer-XL outputs them directly
+        if isinstance(model, TransfoXLLMHeadModel):
+            log_probabilities = prediction_scores[:, -1]
+        else:
+            log_probabilities = np.log(softmax(prediction_scores, axis=-1))[:, -1]
 
-            # Get probability for the chosen last word
-            prediction_scores = get_attribute(outputs, "prediction_scores")
+        # Get predicted token log probabilities
+        mask = np.zeros_like(log_probabilities)
+        for idx, id in enumerate(input_ids[:, i]):
+            mask[idx, id] = 1
+        
+        token_log_prob = log_probabilities[mask == 1]
 
-            # Get log probabilities. Tranformer-XL outputs them directly
-            if isinstance(model, TransfoXLLMHeadModel):
-                log_probabilities = prediction_scores[0, -1]
-            else:
-                log_probabilities = np.log(softmax(prediction_scores[0], axis=-1))[-1]
+        # Append to sequence
+        if i == 1:
+            sequence_log_probs = token_log_prob[:, None]
+        else:
+            sequence_log_probs = np.append(sequence_log_probs, token_log_prob[:, None], axis=1)
 
-            token_prob = log_probabilities[tokens[i]]
+    # Mask log_probabilities
+    sequence_log_probs = ma.array(sequence_log_probs, mask=(attention_mask[:, 1:] == 0).cpu().numpy(), fill_value=0)
 
-            sub_sequence_log_probs.append(token_prob.item())
+    # Compute lengths of each batch
+    sequence_lengths = sequence_log_probs.count(axis=1) + 1
 
-        # Compute perplexity. If the whole sentence is padding skip
-        if len(sub_sequence_log_probs) > 0:
-            # Perplexity direct
-            # perplexity = torch.pow(torch.prod(1.0 / sub_sequence_probs.double()), 1/sub_sequence_probs.size(0))
+    sum_log_probs = sequence_log_probs.sum(axis=1) 
 
-            # exp(log(PPL))
-            perplexity = np.exp((-1.0 / len(sub_sequence_log_probs)) * np.sum(sub_sequence_log_probs, dtype=np.longdouble), dtype=np.longdouble)
+    # Compute perplexity.
+    perplexity = ma.exp(-sum_log_probs/ sequence_lengths)
 
-            perplexities.append(perplexity.item())
-
-    return perplexities
+    return perplexity
 

@@ -45,7 +45,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
     for epoch in range(1, epochs + 1):
         model.train()
         average_loss_train =[]
-        for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} - Training", leave=False)):
+        for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} - Training", leave=False, smoothing=0)):
             # Get the appropriate columns
             input_ids = batch["input_ids"]
 
@@ -89,6 +89,8 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                 optimizer.zero_grad()
                 del aggregate_loss
 
+            # Clear GPU cache
+            torch.cuda.empty_cache()
         
         average_loss_train = np.mean(average_loss_train)
 
@@ -96,10 +98,9 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
         model.eval()
         if valid_loader:
             with torch.no_grad():
-                # Go through 
-                losses = []
-                perplexities = []
-                for batch in tqdm(valid_loader, desc=f"Epoch {epoch} - Validation", leave=False):
+                # Go through all batches
+                losses = np.array([])
+                for i, batch in enumerate(tqdm(valid_loader, desc=f"Epoch {epoch} - Validation", leave=False)):
                     # Get the appropriate columns
                     input_ids = batch["input_ids"]
 
@@ -109,29 +110,40 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                     except KeyError:
                         attention_mask = torch.ones_like(input_ids)
                     
+                    # Move to GPU if possible
                     input_ids = input_ids.to(device)
                     attention_mask = attention_mask.to(device)
 
-
+                    # Forward Pass
                     outputs = forward_pass(model, input_ids, attention_mask, subsequence_len=subsequence_len)
                   
+                    # Read loss
                     loss = get_attribute(outputs, "loss")
 
+                    # Get mean of all non-zero elements
                     if loss.dim() > 0:
                         loss = loss[loss != 0].mean()
 
-                    losses.append(loss.cpu().detach().item())
+                    # Save losses
+                    losses = np.append(losses, loss.cpu().detach().item())
 
-                    # compute perplexity
-                    perplexities.extend(perplexity(model, input_ids, attention_mask, subsequence_len))
+                    # Save perplexity
+                    if i == 0:
+                        perplexities = perplexity(model, input_ids, attention_mask, subsequence_len)[None]
+                    else:
+                        perplexities = np.ma.append(
+                            perplexities,
+                            perplexity(model, input_ids, attention_mask, subsequence_len)[None],
+                            axis=0
+                        )
+                    torch.cuda.empty_cache()
 
-                average_ppl = np.mean(perplexities, dtype=np.longdouble)
-                average_loss = np.mean(losses)
+                average_ppl = perplexities.mean()
+                average_loss = losses.mean()
 
                 writer.add_scalars("Loss", {"valid": average_loss}, epoch)
                 writer.add_scalars("Loss", {"train": average_loss_train}, epoch)
                 writer.add_scalar("Perplexity/test", average_ppl, epoch)
-
                
                 print(f"Epoch {epoch:<4n} in {epochs:<4n}: avg_loss_train: {average_loss_train:<8.4n} avg_loss_test: {average_loss:<8.4n} avg_ppl: {average_ppl:<8.4n}")
 

@@ -23,7 +23,7 @@ def main(main_config):
     loader_config = main_config["compressive_transformer"].pop("data_loader")
 
     # Get tokenizer
-    tokenizer = TransfoXLTokenizer.from_pretrained(main_config["transformer_xl_tokenizer"]["path"])
+    tokenizer = TransfoXLTokenizer.from_pretrained(**main_config["transformer_xl_tokenizer"])
 
     # Get dataloaders for training
     train_loader, valid_loader, _ = get_dataloader(tokenizer, **loader_config)

@@ -13,21 +13,19 @@ optimizer:
   learning_rate: 0.0001
 
 transformer_xl:
-  n_layer: 8
-  n_head: 8
-  n_embed: 768
+  n_layer: 9
+  n_head: 6
   d_inner: 3072 
-  d_head: 218
   cutoffs: [2222, 4444, 22222]
   return_dict: True
-  mem_len: 3
+  mem_len: 0
   train: 
     <<: *train
-    subsequence_len: 16
+    subsequence_len: 128
   data_loader:
     <<: *data_loader
-    max_length: 64
-    samples:
+    max_length: 128
+    samples: 5942
     valid_samples: 128
     replace_pad: True
 
