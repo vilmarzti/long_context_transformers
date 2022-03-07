@@ -25,7 +25,7 @@ transformer_xl:
     subsequence_len: 32
   data_loader:
     <<: *data_loader
-    max_length: 218
+    max_length: 256
     replace_pad: True
 
 transformer_xl_tokenizer:
