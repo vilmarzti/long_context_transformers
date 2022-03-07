@@ -45,7 +45,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
     for epoch in range(1, epochs + 1):
         model.train()
         average_loss_train =[]
-        for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} - Training", leave=False)):
+        for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} - Training", leave=False, smoothing=0)):
             # Get the appropriate columns
             input_ids = batch["input_ids"]
 
@@ -136,6 +136,7 @@ def train(model, train_loader, optimizer, epochs=30, valid_loader=None, lr_sched
                             perplexity(model, input_ids, attention_mask, subsequence_len)[None],
                             axis=0
                         )
+                    torch.cuda.empty_cache()
 
                 average_ppl = perplexities.mean()
                 average_loss = losses.mean()
