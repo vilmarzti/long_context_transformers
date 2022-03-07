@@ -1,7 +1,7 @@
 data_loader: &data_loader
   samples: 
   valid_samples: 512
-  batch_size: 8
+  batch_size: 16
   max_length: 512
 
 train: &train
@@ -22,10 +22,9 @@ transformer_xl:
   mem_len: 7
   train: 
     <<: *train
-    subsequence_len: 32
+    subsequence_len: 64
   data_loader:
     <<: *data_loader
-    max_length: 256
     replace_pad: True
 
 transformer_xl_tokenizer:
