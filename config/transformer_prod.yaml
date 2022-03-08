@@ -6,7 +6,7 @@ data_loader: &data_loader
 
 train: &train
   epochs: 50
-  subsequence_len: 64
+  subsequence_len: 512
   aggregate: 4
 
 optimizer: 
