@@ -8,7 +8,7 @@ from datasets import load_dataset
 import datasets
 
 
-def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None, padding=True, replace_pad=False):
+def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_samples=None, padding="max_length", replace_pad=False):
     """Creates DataLoaders from wikitext2 encoded with a tokenizer
 
     Args:
@@ -46,7 +46,7 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
 
     # Tokenize Dataset
     tokenized_dataset = dataset.map(
-        lambda samples: tokenizer(samples["text"], max_length=max_length, truncation=True, padding=padding, return_attention_mask=True),
+        lambda samples: tokenizer(samples["text"], max_length=max_length, truncation=True, padding=padding, return_attention_mask=True, verbose=False),
         batched=True
     )
 
