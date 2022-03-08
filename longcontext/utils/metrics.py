@@ -33,48 +33,35 @@ def perplexity(model, input_ids, attention_mask, subsequence_len=-1):
 
     # Compute Perplexity for a sentence
     sequence_log_probs = []
-    input_ids_numpy = input_ids.cpu().numpy()
 
-    # Generate probabilities for subsequence of sentence
-    for i in range(1, input_ids.size(1)):
-        # Forwards pass
-        outputs = forward_pass(
-            model,
-            input_ids[:, :i],
-            attention_mask[:, :i],
-            subsequence_len,
-            use_labels=False
-        )
+    # Forwards pass
+    outputs = forward_pass(
+        model,
+        input_ids[:, :-1],
+        attention_mask[:, :-1],
+        subsequence_len,
+        use_labels=False
+    )
 
-        # Get probability for the chosen last word
-        prediction_scores = get_attribute(outputs, "prediction_scores")
+    # Get probability for the chosen last word
+    prediction_scores = get_attribute(outputs, "prediction_scores")
 
-        # Get log probabilities. Tranformer-XL outputs them directly
-        if isinstance(model, TransfoXLLMHeadModel):
-            log_probabilities = prediction_scores[:, -1]
-        else:
-            log_probabilities = np.log(softmax(prediction_scores, axis=-1))[:, -1]
+    # Get log probabilities. Tranformer-XL outputs them directly
+    if isinstance(model, TransfoXLLMHeadModel):
+        log_probabilities = prediction_scores
+    else:
+        log_probabilities = np.log(softmax(prediction_scores, axis=-1))
 
-        # Get predicted token log probabilities
-        mask = np.zeros_like(log_probabilities)
-        for idx, id in enumerate(input_ids[:, i]):
-            mask[idx, id] = 1
-        
-        token_log_prob = log_probabilities[mask == 1]
+    # Get log_probabilities from the teacher-forced word
+    sequence_log_probs = np.take_along_axis(log_probabilities, input_ids[:, 1:, None].cpu().numpy(), axis=2)[:, :, 0]
 
-        # Append to sequence
-        if i == 1:
-            sequence_log_probs = token_log_prob[:, None]
-        else:
-            sequence_log_probs = np.append(sequence_log_probs, token_log_prob[:, None], axis=1)
-
-    # Mask log_probabilities
+    # Mask the sequence probabilties
     sequence_log_probs = ma.array(sequence_log_probs, mask=(attention_mask[:, 1:] == 0).cpu().numpy(), fill_value=0)
 
     # Compute lengths of each batch
-    sequence_lengths = sequence_log_probs.count(axis=1) + 1
+    sequence_lengths = sequence_log_probs.count(axis=-1) + 1
 
-    sum_log_probs = sequence_log_probs.sum(axis=1) 
+    sum_log_probs = sequence_log_probs.sum(axis=-1) 
 
     # Compute perplexity.
     perplexity = ma.exp(-sum_log_probs/ sequence_lengths)
