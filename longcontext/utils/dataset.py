@@ -39,7 +39,7 @@ def get_dataloader(tokenizer, batch_size=8, samples=None, max_length=256, valid_
     datasets.logging.set_verbosity_error()
 
     # Load Dataset
-    dataset = load_dataset("wikitext", name="wikitext-2-v1")
+    dataset = load_dataset("wikitext", name="wikitext-103-v1")
 
     # Exclude empty text samples
     dataset = dataset.filter(lambda sample: len(sample["text"]) > 0)
